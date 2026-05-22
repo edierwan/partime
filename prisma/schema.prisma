@@ -1,0 +1,139 @@
+// Partime — single PostgreSQL database via DATABASE_URL.
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  adjustments  AttendanceAdjustmentAudit[]
+}
+
+model Staff {
+  id              String   @id @default(cuid())
+  payName         String
+  alias           String   @unique
+  fullName        String
+  phone           String   @unique
+  bankName        String?
+  bankAccount     String?
+  hourlyRateCents Int      @default(0)
+  active          Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions        AttendanceSession[]
+  scanLogs        ScanLog[]
+
+  @@index([active])
+}
+
+model WorkEvent {
+  id               String   @id @default(cuid())
+  name             String
+  location         String
+  workDate         DateTime
+  defaultRateCents Int      @default(0)
+  autoBreakRule    Boolean  @default(true)
+  active           Boolean  @default(true)
+  scanToken        String   @unique
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sessions         AttendanceSession[]
+  scanLogs         ScanLog[]
+
+  @@index([workDate])
+  @@index([active])
+}
+
+enum AttendanceStatus {
+  OPEN
+  COMPLETED
+  MISSING_CLOCK_OUT
+  MANUAL_ADJUSTED
+  CANCELLED
+}
+
+model AttendanceSession {
+  id                       String           @id @default(cuid())
+  event                    WorkEvent        @relation(fields: [eventId], references: [id])
+  eventId                  String
+  staff                    Staff            @relation(fields: [staffId], references: [id])
+  staffId                  String
+  workDate                 DateTime
+  clockInAt                DateTime
+  clockOutAt               DateTime?
+  grossMinutes             Int?
+  breakDeductMinutes       Int?
+  breakOverridden          Boolean          @default(false)
+  payableMinutes           Int?
+  hourlyRateSnapshotCents  Int
+  totalPayCents            Int?
+  status                   AttendanceStatus @default(OPEN)
+  adminNotes               String?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  audits                   AttendanceAdjustmentAudit[]
+
+  @@unique([eventId, staffId, workDate])
+  @@index([workDate])
+  @@index([status])
+}
+
+enum ScanAction {
+  CLOCK_IN
+  CLOCK_OUT
+  LOOKUP
+  DUPLICATE
+  BLOCKED
+}
+
+model ScanLog {
+  id        String     @id @default(cuid())
+  event     WorkEvent? @relation(fields: [eventId], references: [id])
+  eventId   String?
+  staff     Staff?     @relation(fields: [staffId], references: [id])
+  staffId   String?
+  action    ScanAction
+  ip        String?
+  userAgent String?
+  lat       Float?
+  lng       Float?
+  message   String?
+  createdAt DateTime   @default(now())
+
+  @@index([createdAt])
+}
+
+model AttendanceAdjustmentAudit {
+  id        String            @id @default(cuid())
+  session   AttendanceSession @relation(fields: [sessionId], references: [id])
+  sessionId String
+  editedBy  AdminUser         @relation(fields: [adminId], references: [id])
+  adminId   String
+  reason    String
+  beforeJson Json
+  afterJson  Json
+  editedAt  DateTime          @default(now())
+
+  @@index([sessionId])
+}
+
+model AppSetting {
+  key   String @id
+  value String
+}
