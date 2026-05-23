@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
+import { focusFirstFieldError, formatOtpCountdown } from '@/lib/public-registration-client';
 import { PublicLocale, publicDict } from '@/lib/public-i18n';
+import { validateEmployerRegistrationDraft } from '@/lib/public-registration-validation';
 
 const INDUSTRIES = ['Event', 'Retail', 'F&B', 'Construction', 'Maintenance', 'Logistics', 'Warehouse', 'Cleaning', 'Other'];
 const HIRING_NEEDS = ['General worker', 'Event crew', 'Technician', 'Promoter', 'Runner', 'Other'];
@@ -15,12 +17,19 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
   const t = publicDict[locale];
   const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState<'form' | 'otp' | 'done'>('form');
-  const [pending, setPending] = useState(false);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const [otpFormReady, setOtpFormReady] = useState(false);
+  const [hasTriedOtp, setHasTriedOtp] = useState(false);
+  const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
+  const [otpExpiresAtMs, setOtpExpiresAtMs] = useState<number | null>(null);
+  const [resendAvailableAtMs, setResendAvailableAtMs] = useState<number | null>(null);
+  const [clockMs, setClockMs] = useState(Date.now());
 
   useEffect(() => {
     return () => {
@@ -28,9 +37,58 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
     };
   }, [logoPreviewUrl]);
 
-  async function sendOtp() {
+  useEffect(() => {
+    syncOtpReadiness(false);
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'otp' || (!otpExpiresAtMs && !resendAvailableAtMs)) return;
+    const timer = window.setInterval(() => setClockMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [otpExpiresAtMs, resendAvailableAtMs, step]);
+
+  const resendRemainingSeconds = resendAvailableAtMs ? Math.max(0, Math.ceil((resendAvailableAtMs - clockMs) / 1000)) : 0;
+  const otpRemainingSeconds = otpExpiresAtMs ? Math.max(0, Math.ceil((otpExpiresAtMs - clockMs) / 1000)) : 0;
+  const otpExpired = step === 'otp' && otpExpiresAtMs !== null && otpRemainingSeconds === 0;
+
+  function syncOtpReadiness(updateErrors: boolean) {
+    if (!formRef.current) return false;
+    const validation = validateEmployerRegistrationDraft(new FormData(formRef.current));
+    setOtpFormReady(validation.ok);
+    if (updateErrors) {
+      setFieldErrors((current) => ({
+        ...preserveServerOnlyErrors(current, ['companyLogo', 'otpCode']),
+        ...(validation.ok ? {} : validation.fieldErrors),
+      }));
+    }
+    return validation.ok;
+  }
+
+  function handleInvalidOtpAttempt() {
     if (!formRef.current) return;
-    setPending(true);
+    setHasTriedOtp(true);
+    setError(t.completeRequiredBeforeOtp);
+    const validation = validateEmployerRegistrationDraft(new FormData(formRef.current));
+    if (!validation.ok) {
+      setFieldErrors((current) => ({
+        ...preserveServerOnlyErrors(current, ['companyLogo', 'otpCode']),
+        ...validation.fieldErrors,
+      }));
+      focusFirstFieldError(formRef.current, validation.fieldErrors);
+      setOtpFormReady(false);
+    }
+  }
+
+  async function sendOtp() {
+    if (!formRef.current || isSendingOtp) return;
+    const validation = validateEmployerRegistrationDraft(new FormData(formRef.current));
+    setOtpFormReady(validation.ok);
+    if (!validation.ok) {
+      handleInvalidOtpAttempt();
+      return;
+    }
+
+    setIsSendingOtp(true);
     setError(null);
     setFieldErrors({});
     const body = new FormData(formRef.current);
@@ -38,29 +96,53 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
     body.set('phone', String(body.get('contactPhone') || ''));
     const res = await fetch('/api/public/otp/send', { method: 'POST', body });
     const data = await res.json().catch(() => ({}));
-    setPending(false);
+    setIsSendingOtp(false);
     if (!res.ok || !data.ok) {
+      if (data.error === 'REGISTRATION_INCOMPLETE' && data.fieldErrors) {
+        setHasTriedOtp(true);
+        setFieldErrors(data.fieldErrors || {});
+        setError(data.message || t.completeRequiredBeforeOtp);
+        focusFirstFieldError(formRef.current, data.fieldErrors || {});
+        return;
+      }
+      if (data.error === 'OTP_COOLDOWN_ACTIVE') {
+        setStep('otp');
+        setMaskedPhone(data.maskedPhone || maskedPhone);
+        setResendAvailableAtMs(Date.now() + Number(data.retryAfterSeconds || 0) * 1000);
+        if (typeof data.expiresInSeconds === 'number') {
+          setOtpExpiresAtMs(Date.now() + Number(data.expiresInSeconds) * 1000);
+        }
+        setError(data.message || null);
+        return;
+      }
       setError(data.message || 'We could not send the OTP.');
       setFieldErrors(data.fieldErrors || {});
       return;
     }
     setStep('otp');
     setMessage(data.message || 'OTP sent.');
+    setMaskedPhone(data.maskedPhone || null);
+    setOtpExpiresAtMs(Date.now() + Number(data.expiresInSeconds || 300) * 1000);
+    setResendAvailableAtMs(Date.now() + Number(data.resendAfterSeconds || 60) * 1000);
+    setClockMs(Date.now());
   }
 
   async function verifyAndRegister() {
-    if (!formRef.current) return;
-    setPending(true);
+    if (!formRef.current || isVerifying || otpExpired) return;
+    setIsVerifying(true);
     setError(null);
     setFieldErrors({});
     const body = new FormData(formRef.current);
     body.set('otpCode', otpCode);
     const res = await fetch('/api/public/register/employer', { method: 'POST', body });
     const data = await res.json().catch(() => ({}));
-    setPending(false);
+    setIsVerifying(false);
     if (!res.ok || !data.ok) {
       setError(data.message || 'We could not submit employer registration.');
       setFieldErrors(data.fieldErrors || {});
+      if (data.fieldErrors && Object.keys(data.fieldErrors).length > 0) {
+        focusFirstFieldError(formRef.current, data.fieldErrors);
+      }
       return;
     }
     setStep('done');
@@ -89,7 +171,7 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
         <h1 className="mt-3 text-3xl font-semibold text-ink-950">{t.employerTitle}</h1>
         <p className="mt-2 text-sm text-ink-600">{t.employerSubtitle}</p>
       </div>
-      <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7">
+      <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7" onChange={() => { setOtpFormReady(syncOtpReadiness(hasTriedOtp)); setClockMs(Date.now()); }}>
         <Section title="1. Company Details">
           <Input name="companyName" label={t.companyName} error={fieldErrors.companyName} />
           <div className="flex items-start gap-4 rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
@@ -200,17 +282,28 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
               <label className="label">{t.otpTitle}</label>
               <input className="input max-w-[220px] text-center tracking-[0.3em]" inputMode="numeric" maxLength={4} value={otpCode} onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="0000" />
               <FieldError error={fieldErrors.otpCode} />
+              {maskedPhone && <p className="mt-2 text-xs text-ink-600">{`WhatsApp: ${maskedPhone}`}</p>}
+              {otpRemainingSeconds > 0 && <p className="mt-1 text-xs text-ink-600">{t.otpExpiresIn.replace('{time}', formatOtpCountdown(otpRemainingSeconds))}</p>}
+              {otpExpired && <p className="mt-2 text-xs text-rose-600">{t.otpExpired}</p>}
             </div>
           )}
           {message && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>}
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
           <div className="flex flex-wrap gap-3">
             {step === 'form' ? (
-              <button type="button" disabled={pending} onClick={sendOtp} className="btn-primary">{pending ? 'Sending...' : t.sendOtp}</button>
+              <button
+                type="button"
+                disabled={isSendingOtp}
+                aria-disabled={!otpFormReady || isSendingOtp}
+                onClick={otpFormReady ? sendOtp : handleInvalidOtpAttempt}
+                className={`btn-primary ${!otpFormReady && !isSendingOtp ? 'cursor-not-allowed opacity-60' : ''}`}
+              >
+                {isSendingOtp ? t.sendingOtp : otpFormReady ? t.sendOtp : t.completeRequiredFieldsFirst}
+              </button>
             ) : (
               <>
-                <button type="button" disabled={pending || otpCode.length !== 4} onClick={verifyAndRegister} className="btn-primary">{pending ? 'Verifying...' : t.verifySubmit}</button>
-                <button type="button" disabled={pending} onClick={sendOtp} className="btn-ghost">{pending ? 'Sending...' : t.resendOtp}</button>
+                <button type="button" disabled={isVerifying || otpCode.length !== 4 || otpExpired} onClick={verifyAndRegister} className="btn-primary">{isVerifying ? 'Verifying...' : t.verifySubmit}</button>
+                <button type="button" disabled={isSendingOtp || resendRemainingSeconds > 0} onClick={sendOtp} className="btn-ghost">{isSendingOtp ? t.sendingOtp : resendRemainingSeconds > 0 ? t.resendOtpIn.replace('{seconds}', String(resendRemainingSeconds)) : t.resendOtp}</button>
               </>
             )}
           </div>
@@ -236,4 +329,8 @@ function Input({ name, label, placeholder, error, inputMode, defaultValue }: { n
 
 function FieldError({ error }: { error?: string }) {
   return error ? <p className="mt-1 text-xs text-rose-600">{error}</p> : null;
+}
+
+function preserveServerOnlyErrors(fieldErrors: FieldErrors, keys: string[]): FieldErrors {
+  return Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => keys.includes(key)));
 }

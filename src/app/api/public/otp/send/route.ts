@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
+import { OtpPurpose } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getBaileysGatewayDiagnostics } from '@/lib/baileys/client';
+import { parseEmployerRegistrationForm } from '@/lib/employer-registration';
+import { markOtpSendFailed, markOtpSent, reserveOtpSend } from '@/lib/otp-service';
+import { parseStaffProfileForm } from '@/lib/staff-profile';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
-import { generateOtpCode, hashOtpCode, otpExpiresAt, OTP_MAX_ATTEMPTS, OTP_MAX_SENDS_PER_IP, OTP_MAX_SENDS_PER_PHONE } from '@/lib/otp';
 import { sendWhatsAppOtp } from '@/lib/whatsapp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER']);
+const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER', 'STAFF_LOGIN', 'PART_TIMER_LOGIN', 'EMPLOYER_LOGIN']);
 
 export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);
@@ -19,50 +22,55 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: 'Invalid OTP purpose.' }, { status: 400 });
   }
 
-  const rawPhone = String(formData.get('phone') || formData.get('contactPhone') || '').trim();
-  const phoneE164 = normalizeMalaysiaPhone(rawPhone);
-  if (!phoneE164) {
-    return NextResponse.json({ ok: false, message: 'Enter a valid Malaysia mobile number.', fieldErrors: { phone: 'Enter a valid Malaysia mobile number.', contactPhone: 'Enter a valid Malaysia mobile number.' } }, { status: 400 });
+  let phoneE164 = '';
+  if (purpose === 'EMPLOYER_REGISTER') {
+    const parsed = await parseEmployerRegistrationForm(formData);
+    if (!parsed.ok) {
+      return NextResponse.json({ ok: false, error: 'REGISTRATION_INCOMPLETE', message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
+    }
+    phoneE164 = parsed.data.contactPhoneE164;
+  } else if (purpose === 'PART_TIMER_REGISTER') {
+    const parsed = await parseStaffProfileForm(formData, {
+      defaultApprovalStatus: 'PENDING_REVIEW',
+      defaultStatus: 'PENDING_REVIEW',
+      defaultActive: true,
+      requireIdentity: true,
+      requireSkills: true,
+      requireConsent: true,
+      requireStructuredLocation: true,
+    });
+    if (!parsed.ok) {
+      return NextResponse.json({ ok: false, error: 'REGISTRATION_INCOMPLETE', message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
+    }
+    phoneE164 = parsed.data.phoneE164;
+  } else {
+    phoneE164 = normalizeMalaysiaPhone(String(formData.get('phoneE164') || formData.get('phone') || formData.get('contactPhone') || '').trim());
+    if (!phoneE164) {
+      return NextResponse.json({ ok: false, message: 'Enter a valid Malaysia mobile number.', fieldErrors: { phone: 'Enter a valid Malaysia mobile number.', contactPhone: 'Enter a valid Malaysia mobile number.' } }, { status: 400 });
+    }
   }
 
-  const now = new Date();
   const requestIp = clientIp(req);
   const userAgent = req.headers.get('user-agent')?.slice(0, 250) || null;
 
-  const [phoneAttempts, ipAttempts] = await Promise.all([
-    prisma.staffOtp.count({
-      where: { phoneE164, purpose: purpose as any, createdAt: { gte: new Date(now.getTime() - 15 * 60 * 1000) } },
-    }),
-    requestIp
-      ? prisma.staffOtp.count({
-          where: { requestIp, purpose: purpose as any, createdAt: { gte: new Date(now.getTime() - 60 * 60 * 1000) } },
-        })
-      : Promise.resolve(0),
-  ]);
-
-  if (phoneAttempts >= OTP_MAX_SENDS_PER_PHONE) {
-    return NextResponse.json({ ok: false, message: 'Too many OTP requests for this phone. Please wait 15 minutes and try again.' }, { status: 429 });
-  }
-  if (ipAttempts >= OTP_MAX_SENDS_PER_IP) {
-    return NextResponse.json({ ok: false, message: 'Too many OTP requests from this network. Please try again later.' }, { status: 429 });
-  }
-
-  const code = generateOtpCode();
-  const otp = await prisma.staffOtp.create({
-    data: {
-      phoneE164,
-      codeHash: hashOtpCode({ phoneE164, purpose, code }),
-      purpose: purpose as any,
-      expiresAt: otpExpiresAt(now),
-      attemptCount: 0,
-      maxAttempts: OTP_MAX_ATTEMPTS,
-      requestIp,
-      userAgent,
-      sendStatus: 'PENDING',
-    },
+  const reservation = await reserveOtpSend({
+    phoneE164,
+    purpose: purpose as OtpPurpose,
+    requestIp,
+    userAgent,
   });
+  if (!reservation.ok) {
+    return NextResponse.json({
+      ok: false,
+      error: reservation.error,
+      message: reservation.message,
+      retryAfterSeconds: reservation.retryAfterSeconds,
+      expiresInSeconds: reservation.expiresInSeconds,
+      maskedPhone: reservation.maskedPhone,
+    }, { status: reservation.status });
+  }
 
-  const delivery = await sendWhatsAppOtp({ toPhoneE164: phoneE164, code });
+  const delivery = await sendWhatsAppOtp({ toPhoneE164: phoneE164, code: reservation.code });
   if (!delivery.ok) {
     const diagnostics = getBaileysGatewayDiagnostics();
     const diagnosticPayload = {
@@ -75,42 +83,42 @@ export async function POST(req: Request) {
       resolvedUrl: diagnostics.resolvedUrl,
       hasApiKey: diagnostics.hasApiKey,
     };
-    await prisma.staffOtp.update({
-      where: { id: otp.id },
-      data: {
-        sendStatus: 'FAILED',
-        sendError: delivery.detail || delivery.error || 'OTP delivery failed',
-        payloadJson: {
-          purpose,
-          error: delivery.error || null,
-          detail: delivery.detail || null,
-          providerTenant: delivery.providerTenant || diagnostics.providerTenant,
-          sessionId: delivery.sessionId || diagnostics.sessionId,
-          requestUrl: delivery.requestUrl || diagnostics.resolvedUrl,
-          statusCode: delivery.statusCode || null,
-          diagnostics: diagnosticPayload,
-        },
+    await markOtpSendFailed({
+      otpId: reservation.otpId,
+      error: delivery.detail || delivery.error || 'OTP delivery failed',
+      payloadJson: {
+        purpose,
+        error: delivery.error || null,
+        detail: delivery.detail || null,
+        providerTenant: delivery.providerTenant || diagnostics.providerTenant,
+        sessionId: delivery.sessionId || diagnostics.sessionId,
+        requestUrl: delivery.requestUrl || diagnostics.resolvedUrl,
+        statusCode: delivery.statusCode || null,
+        diagnostics: diagnosticPayload,
       },
     });
     return NextResponse.json({ ok: false, message: 'We could not send the WhatsApp OTP right now. Please try again shortly.' }, { status: 503 });
   }
 
-  await prisma.staffOtp.update({
-    where: { id: otp.id },
-    data: {
-      sendStatus: 'SENT',
-      sendError: null,
-      payloadJson: {
-        purpose,
-        messageId: delivery.messageId || null,
-        providerTenant: delivery.providerTenant || null,
-        sessionId: delivery.sessionId || null,
-        requestUrl: delivery.requestUrl || null,
-      },
+  await markOtpSent({
+    otpId: reservation.otpId,
+    providerMessageId: delivery.messageId || null,
+    payloadJson: {
+      purpose,
+      messageId: delivery.messageId || null,
+      providerTenant: delivery.providerTenant || null,
+      sessionId: delivery.sessionId || null,
+      requestUrl: delivery.requestUrl || null,
     },
   });
 
-  return NextResponse.json({ ok: true, message: `OTP sent to WhatsApp ending ${phoneE164.slice(-4)}. The code expires in 5 minutes.` });
+  return NextResponse.json({
+    ok: true,
+    message: `OTP sent to WhatsApp ending ${reservation.maskedPhone.slice(-4)}. The code expires in 5 minutes.`,
+    expiresInSeconds: reservation.expiresInSeconds,
+    resendAfterSeconds: reservation.resendAfterSeconds,
+    maskedPhone: reservation.maskedPhone,
+  });
 }
 
 function clientIp(req: Request): string | null {

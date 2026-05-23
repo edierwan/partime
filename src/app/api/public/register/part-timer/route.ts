@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { hashOtpCode } from '@/lib/otp';
+import { verifyOtpCode } from '@/lib/otp-service';
 import { parseStaffProfileForm } from '@/lib/staff-profile';
 import { savePartTimerPortfolioMedia, saveStaffProfileImage } from '@/lib/uploads';
 import { syncPartTimerSkills } from '@/lib/skills';
@@ -31,19 +31,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: 'Enter the 4-digit OTP code.', fieldErrors: { otpCode: 'Enter the 4-digit OTP code.' } }, { status: 400 });
   }
 
-  const otp = await prisma.staffOtp.findFirst({
-    where: { phoneE164: data.phoneE164, purpose: PURPOSE as any, consumedAt: null },
-    orderBy: { createdAt: 'desc' },
+  const otpResult = await verifyOtpCode({
+    phoneE164: data.phoneE164,
+    purpose: PURPOSE as any,
+    code: otpCode,
   });
-  if (!otp || otp.sendStatus !== 'SENT' || otp.expiresAt < new Date()) {
-    return NextResponse.json({ ok: false, message: 'OTP expired. Please request a new code.' }, { status: 400 });
-  }
-  if (otp.attemptCount >= otp.maxAttempts) {
-    return NextResponse.json({ ok: false, message: 'Too many incorrect OTP attempts. Please request a new code.' }, { status: 429 });
-  }
-  if (hashOtpCode({ phoneE164: data.phoneE164, purpose: PURPOSE, code: otpCode }) !== otp.codeHash) {
-    await prisma.staffOtp.update({ where: { id: otp.id }, data: { attemptCount: { increment: 1 } } });
-    return NextResponse.json({ ok: false, message: 'Invalid OTP code.', fieldErrors: { otpCode: 'Invalid OTP code.' } }, { status: 400 });
+  if (!otpResult.ok) {
+    return NextResponse.json({ ok: false, error: otpResult.error, message: otpResult.message, fieldErrors: { otpCode: otpResult.message } }, { status: otpResult.status });
   }
 
   const duplicate = await prisma.staff.findFirst({
@@ -129,6 +123,6 @@ export async function POST(req: Request) {
     }
   }
 
-  await prisma.staffOtp.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+  await prisma.staffOtp.update({ where: { id: otpResult.otp.id }, data: { consumedAt: new Date() } });
   return NextResponse.json({ ok: true, message: 'Registration successful. Your profile is pending admin review.', warning });
 }

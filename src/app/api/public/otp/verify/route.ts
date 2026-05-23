@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { hashOtpCode } from '@/lib/otp';
+import { verifyOtpCode } from '@/lib/otp-service';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER']);
+const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER', 'STAFF_LOGIN', 'PART_TIMER_LOGIN', 'EMPLOYER_LOGIN']);
 
 export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);
@@ -19,22 +18,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: 'Invalid OTP request.' }, { status: 400 });
   }
 
-  const otp = await prisma.staffOtp.findFirst({
-    where: { phoneE164, purpose: purpose as any, consumedAt: null },
-    orderBy: { createdAt: 'desc' },
+  const result = await verifyOtpCode({
+    phoneE164,
+    purpose: purpose as any,
+    code,
+    consumeOnSuccess: true,
   });
-  if (!otp || otp.sendStatus !== 'SENT' || otp.expiresAt < new Date()) {
-    return NextResponse.json({ ok: false, message: 'OTP expired. Please request a new code.' }, { status: 400 });
-  }
-  if (otp.attemptCount >= otp.maxAttempts) {
-    return NextResponse.json({ ok: false, message: 'Too many incorrect OTP attempts. Please request a new code.' }, { status: 429 });
+  if (!result.ok) {
+    return NextResponse.json({ ok: false, error: result.error, message: result.message }, { status: result.status });
   }
 
-  const hashed = hashOtpCode({ phoneE164, purpose, code });
-  if (hashed !== otp.codeHash) {
-    await prisma.staffOtp.update({ where: { id: otp.id }, data: { attemptCount: { increment: 1 } } });
-    return NextResponse.json({ ok: false, message: 'Invalid OTP code.' }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, expiresInSeconds: result.expiresInSeconds });
 }

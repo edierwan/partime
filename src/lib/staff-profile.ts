@@ -227,8 +227,8 @@ export async function parseStaffProfileForm(
   if (value.nationality === 'Other' && !value.otherNationality.trim()) {
     fieldErrors.otherNationality = 'Enter nationality';
   }
-  if (requireSkills && skillIds.length === 0 && !otherSkillName) {
-    fieldErrors.skillIds = 'Select at least one skill or enter another skill';
+  if (requireSkills && skillIds.length === 0) {
+    fieldErrors.skillIds = 'Please select at least one skill.';
   }
   if (requireConsent && fd.get('consent') !== 'on' && fd.get('consent') !== 'true') {
     fieldErrors.consent = 'Consent is required';

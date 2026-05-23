@@ -171,7 +171,7 @@ model Tenant {
   registrationNo String?
   businessType   String?
   phoneE164      String
-  email          String
+  email          String?      @unique
   addressLine1   String?
   addressLine2   String?
   city           String?
@@ -220,7 +220,7 @@ model EmployerRegistration {
   companyName            String
   contactPersonName      String
   contactPhoneE164       String
-  contactEmail           String
+  contactEmail           String?
   businessRegistrationNo String?
   industry               String?
   addressLine1           String?
@@ -725,27 +725,36 @@ enum OtpPurpose {
   EMPLOYER_REGISTER
   STAFF_LOGIN
   PART_TIMER_LOGIN
+  EMPLOYER_LOGIN
 }
 
 model StaffOtp {
-  id           String     @id @default(cuid())
-  phoneE164    String
-  codeHash     String
-  purpose      OtpPurpose
-  expiresAt    DateTime
-  consumedAt   DateTime?
-  attemptCount Int        @default(0)
-  maxAttempts  Int        @default(5)
-  requestIp    String?
-  userAgent    String?
-  sendStatus   String?
-  sendError    String?
-  payloadJson  Json?
-  createdAt    DateTime   @default(now())
+  id                String     @id @default(cuid())
+  phoneE164         String
+  codeHash          String
+  purpose           OtpPurpose
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  blockedAt         DateTime?
+  attemptCount      Int        @default(0)
+  maxAttempts       Int        @default(5)
+  sendCount         Int        @default(1)
+  lastSentAt        DateTime?
+  requestIp         String?
+  userAgent         String?
+  sendStatus        String?
+  providerMessageId String?
+  sendError         String?
+  payloadJson       Json?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   @@index([phoneE164, createdAt])
+  @@index([phoneE164, purpose, createdAt])
   @@index([requestIp, createdAt])
   @@index([purpose, createdAt])
+  @@index([expiresAt])
+  @@index([consumedAt])
 }
 
 model AttendanceAdjustmentAudit {

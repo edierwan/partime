@@ -106,6 +106,7 @@ export function MalaysiaStateSelect({
         className="input"
         value={value}
         disabled={disabled}
+        data-field-target="stateCode"
         onChange={(event) => {
           const nextCode = event.target.value;
           const option = options.find((item) => item.code === nextCode) || null;
@@ -184,6 +185,7 @@ export function MalaysiaCitySelect({
         value={value}
         list={dataListId}
         disabled={disabled || !stateCode}
+        data-field-target="city"
         placeholder={stateCode ? placeholder : 'Select state first'}
         onChange={(event) => {
           const nextValue = event.target.value;
@@ -302,6 +304,7 @@ export function MalaysiaPostcodeCombobox({
         className="input"
         value={value}
         inputMode="numeric"
+        data-field-target="postcode"
         placeholder={placeholder}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
