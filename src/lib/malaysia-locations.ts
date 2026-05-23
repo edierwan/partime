@@ -32,6 +32,7 @@ export interface ValidateMalaysiaLocationInput {
   requireState?: boolean;
   requireCity?: boolean;
   requirePostcode?: boolean;
+  requireVerifiedPostcode?: boolean;
   allowCustomCity?: boolean;
 }
 
@@ -111,16 +112,19 @@ export async function searchMalaysiaPostcodes({
   limit?: number;
 }): Promise<MalaysiaPostcodeSuggestion[]> {
   const postcodeQuery = normalizePostcode(query);
-  if (!postcodeQuery) return [];
-
   const trimmedStateCode = String(stateCode || '').trim().toUpperCase();
   const normalizedCityName = normalizeMalaysiaLocationName(String(cityName || ''));
+  if (!postcodeQuery && !(trimmedStateCode && normalizedCityName)) return [];
+
   const safeLimit = Math.min(Math.max(limit, 1), 20);
 
   const where: any = {
     active: true,
-    postcode: { startsWith: postcodeQuery },
   };
+
+  if (postcodeQuery) {
+    where.postcode = { startsWith: postcodeQuery };
+  }
 
   if (trimmedStateCode) {
     where.state = { code: trimmedStateCode };
@@ -160,6 +164,7 @@ export async function validateMalaysiaLocation(input: ValidateMalaysiaLocationIn
   const requireState = input.requireState ?? true;
   const requireCity = input.requireCity ?? true;
   const requirePostcode = input.requirePostcode ?? true;
+  const requireVerifiedPostcode = input.requireVerifiedPostcode ?? false;
   const allowCustomCity = input.allowCustomCity ?? true;
 
   const fieldErrors: Record<string, string> = {};
@@ -169,8 +174,9 @@ export async function validateMalaysiaLocation(input: ValidateMalaysiaLocationIn
   const postcode = normalizePostcode(input.postcode);
 
   if (requireState && !trimmedStateCode) {
-    fieldErrors.stateCode = 'Select a valid Malaysian state';
-    fieldErrors.state = 'Select a valid Malaysian state';
+    const message = trimmedCityName ? 'Please select a valid state before choosing city.' : 'Select a valid Malaysian state';
+    fieldErrors.stateCode = message;
+    fieldErrors.state = message;
   }
 
   let stateRecord = trimmedStateCode
@@ -196,7 +202,7 @@ export async function validateMalaysiaLocation(input: ValidateMalaysiaLocationIn
     if (cityRecord) {
       resolvedCityName = cityRecord.name;
     } else if (!allowCustomCity) {
-      fieldErrors.city = 'Select a city that belongs to the selected state';
+      fieldErrors.city = 'City does not match the selected state.';
     }
   }
 
@@ -233,13 +239,17 @@ export async function validateMalaysiaLocation(input: ValidateMalaysiaLocationIn
         const normalizedSelectedCity = normalizeMalaysiaLocationName(trimmedCityName);
         const normalizedPostcodeCity = normalizeMalaysiaLocationName(postcodeCityName);
         if (postcodeCityName && normalizedSelectedCity !== normalizedPostcodeCity) {
-          fieldErrors.postcode = fieldErrors.postcode || 'Postcode does not match the selected city';
+          fieldErrors.postcode = fieldErrors.postcode || buildInvalidPostcodeMessage(trimmedCityName, stateRecord?.name || trimmedStateName || postcodeRecord.state.name);
         }
       } else if (postcodeCityName) {
         resolvedCityName = postcodeCityName;
       }
     } else {
-      warning = 'Postcode is not in the verified Malaysia postcode list yet. It will be saved as entered.';
+      if (requireVerifiedPostcode) {
+        fieldErrors.postcode = 'Postcode is not in the verified Malaysia postcode list.';
+      } else {
+        warning = 'Postcode is not in the verified Malaysia postcode list yet. It will be saved as entered.';
+      }
     }
   }
 
@@ -265,4 +275,9 @@ export async function validateMalaysiaLocation(input: ValidateMalaysiaLocationIn
     },
     warning,
   };
+}
+
+function buildInvalidPostcodeMessage(cityName: string, stateName: string): string {
+  const location = [String(cityName || '').trim(), String(stateName || '').trim()].filter(Boolean).join(', ');
+  return location ? `Please select a valid postcode for ${location}.` : 'Please select a valid postcode for the selected location.';
 }

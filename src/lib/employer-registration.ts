@@ -1,4 +1,5 @@
 import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
+import { toTitleCaseInput } from '@/lib/input-formatting';
 import { validateEmployerRegistrationDraft } from '@/lib/public-registration-validation';
 
 export interface EmployerRegistrationFormData {
@@ -39,6 +40,7 @@ export async function parseEmployerRegistrationForm(fd: FormData): Promise<Emplo
     requireState: true,
     requireCity: true,
     requirePostcode: true,
+    requireVerifiedPostcode: true,
     allowCustomCity: true,
   });
   if (!location.ok) {
@@ -48,15 +50,15 @@ export async function parseEmployerRegistrationForm(fd: FormData): Promise<Emplo
   return {
     ok: true,
     data: {
-      companyName: basic.data.companyName,
+      companyName: toTitleCaseInput(basic.data.companyName),
       businessRegistrationNo: basic.data.businessRegistrationNo || null,
-      contactPersonName: basic.data.contactPersonName,
+      contactPersonName: toTitleCaseInput(basic.data.contactPersonName),
       contactPhone: basic.data.contactPhone,
       contactPhoneE164: basic.data.contactPhoneE164 || '',
       contactEmail: basic.data.contactEmail || null,
       industry: basic.data.industry,
-      addressLine1: basic.data.addressLine1,
-      addressLine2: basic.data.addressLine2 || null,
+      addressLine1: toTitleCaseInput(basic.data.addressLine1),
+      addressLine2: basic.data.addressLine2 ? toTitleCaseInput(basic.data.addressLine2) : null,
       city: location.data.cityName,
       state: location.data.stateName,
       stateCode: location.data.stateCode,

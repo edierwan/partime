@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { formatTitleCaseControl, maybeFormatTitleCaseControl } from '@/lib/input-formatting';
 
 export interface MalaysiaStateOption {
   code: string;
@@ -134,6 +135,9 @@ export function MalaysiaCitySelect({
   error,
   allowCustom = true,
   customHint,
+  inputId,
+  inputName,
+  autoComplete,
 }: {
   stateCode: string;
   value: string;
@@ -145,6 +149,9 @@ export function MalaysiaCitySelect({
   error?: string;
   allowCustom?: boolean;
   customHint?: string;
+  inputId?: string;
+  inputName?: string;
+  autoComplete?: string;
 }) {
   const [options, setOptions] = useState<MalaysiaCityOption[]>([]);
   const dataListId = useId();
@@ -181,12 +188,19 @@ export function MalaysiaCitySelect({
     <div>
       <label className="label">{label}{required ? ' *' : ''}</label>
       <input
+        id={inputId}
         className="input"
+        name={inputName}
         value={value}
         list={dataListId}
+        autoComplete={autoComplete}
+        autoCorrect="off"
         disabled={disabled || !stateCode}
         data-field-target="city"
+        data-1p-ignore={autoComplete ? 'true' : undefined}
+        data-lpignore={autoComplete ? 'true' : undefined}
         placeholder={stateCode ? placeholder : 'Select state first'}
+        spellCheck={false}
         onChange={(event) => {
           const nextValue = event.target.value;
           onChange(nextValue, knownOptions.get(normalizeLocationName(nextValue)) || null);
@@ -215,6 +229,11 @@ export function MalaysiaPostcodeCombobox({
   required,
   error,
   warning,
+  autoResolveFromCity = false,
+  unverifiedWarningMessage,
+  inputId,
+  inputName,
+  autoComplete,
 }: {
   stateCode: string;
   cityName: string;
@@ -227,6 +246,11 @@ export function MalaysiaPostcodeCombobox({
   required?: boolean;
   error?: string;
   warning?: string | null;
+  autoResolveFromCity?: boolean;
+  unverifiedWarningMessage?: string;
+  inputId?: string;
+  inputName?: string;
+  autoComplete?: string;
 }) {
   const [suggestions, setSuggestions] = useState<MalaysiaPostcodeSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -235,15 +259,19 @@ export function MalaysiaPostcodeCombobox({
   const digits = normalizePostcode(value);
 
   useEffect(() => {
-    if (digits.length < 2) {
+    const shouldLookupByCity = autoResolveFromCity && !digits && Boolean(stateCode && cityName.trim());
+
+    if (!shouldLookupByCity && digits.length < 2) {
       setSuggestions([]);
       onWarningChange?.(null);
       lastAutoResolvedRef.current = '';
+      setOpen(false);
       return;
     }
 
     let active = true;
-    const params = new URLSearchParams({ query: digits, limit: '8' });
+    const params = new URLSearchParams({ limit: shouldLookupByCity ? '20' : '8' });
+    if (digits) params.set('query', digits);
     if (stateCode) params.set('stateCode', stateCode);
     if (cityName) params.set('cityName', cityName);
 
@@ -267,7 +295,21 @@ export function MalaysiaPostcodeCombobox({
             }
           } else {
             lastAutoResolvedRef.current = '';
-            onWarningChange?.('Postcode is not in the verified Malaysia postcode list yet. It will be saved as entered.');
+            onWarningChange?.(unverifiedWarningMessage || 'Postcode is not in the verified Malaysia postcode list yet. It will be saved as entered.');
+          }
+        } else if (shouldLookupByCity) {
+          onWarningChange?.(null);
+          if (nextSuggestions.length === 1) {
+            const onlySuggestion = nextSuggestions[0];
+            const key = `${onlySuggestion.postcode}:${onlySuggestion.stateCode}:${onlySuggestion.cityName || ''}`;
+            if (lastAutoResolvedRef.current !== key || value !== onlySuggestion.postcode) {
+              lastAutoResolvedRef.current = key;
+              onSelectSuggestion?.(onlySuggestion);
+            }
+            setOpen(false);
+          } else {
+            lastAutoResolvedRef.current = '';
+            setOpen(nextSuggestions.length > 1);
           }
         } else {
           onWarningChange?.(null);
@@ -284,7 +326,7 @@ export function MalaysiaPostcodeCombobox({
     return () => {
       active = false;
     };
-  }, [cityName, digits, onSelectSuggestion, onWarningChange, stateCode]);
+  }, [autoResolveFromCity, cityName, digits, onSelectSuggestion, onWarningChange, stateCode, unverifiedWarningMessage, value]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -301,11 +343,18 @@ export function MalaysiaPostcodeCombobox({
     <div className="relative" ref={rootRef}>
       <label className="label">{label}{required ? ' *' : ''}</label>
       <input
+        id={inputId}
         className="input"
+        name={inputName}
         value={value}
+        autoComplete={autoComplete}
+        autoCorrect="off"
         inputMode="numeric"
         data-field-target="postcode"
+        data-1p-ignore={autoComplete ? 'true' : undefined}
+        data-lpignore={autoComplete ? 'true' : undefined}
         placeholder={placeholder}
+        spellCheck={false}
         onFocus={() => setOpen(true)}
         onChange={(event) => {
           onChange(normalizePostcode(event.target.value));
@@ -349,6 +398,10 @@ export function MalaysiaAddressFields({
   showAddressLine2 = true,
   showCountry = true,
   allowCustomCity = true,
+  titleCaseAddressLines = false,
+  disableBrowserAutocomplete = false,
+  autocompletePrefix,
+  autoResolvePostcodeFromCity = false,
   helperText,
   footerError,
 }: {
@@ -362,22 +415,48 @@ export function MalaysiaAddressFields({
   showAddressLine2?: boolean;
   showCountry?: boolean;
   allowCustomCity?: boolean;
+  titleCaseAddressLines?: boolean;
+  disableBrowserAutocomplete?: boolean;
+  autocompletePrefix?: string;
+  autoResolvePostcodeFromCity?: boolean;
   helperText?: string;
   footerError?: string;
 }) {
   const [stateCode, setStateCode] = useState(String(initialValue?.stateCode || '').trim().toUpperCase());
   const [stateName, setStateName] = useState(String(initialValue?.stateName || '').trim());
   const [cityName, setCityName] = useState(String(initialValue?.cityName || '').trim());
+  const [cityResolvedFromOption, setCityResolvedFromOption] = useState(Boolean(initialValue?.cityName));
   const [postcode, setPostcode] = useState(normalizePostcode(initialValue?.postcode || ''));
   const [postcodeWarning, setPostcodeWarning] = useState<string | null>(null);
   const country = String(initialValue?.country || 'Malaysia').trim() || 'Malaysia';
+  const citySearchKey = autocompletePrefix ? `${autocompletePrefix}CitySearch` : undefined;
+  const postcodeSearchKey = autocompletePrefix ? `${autocompletePrefix}PostcodeSearch` : undefined;
+  const browserAutocompleteValue = disableBrowserAutocomplete ? 'new-password' : undefined;
 
   return (
     <div className="space-y-4">
       {showAddressLine1 ? (
         <div>
           <label className="label">{labels?.addressLine1 || 'Address line 1'}{required?.addressLine1 ? ' *' : ''}</label>
-          <input className="input" name={names?.addressLine1} defaultValue={initialValue?.addressLine1 || ''} placeholder={placeholders?.addressLine1} />
+          <input
+            className="input"
+            name={names?.addressLine1}
+            autoComplete={browserAutocompleteValue}
+            autoCorrect="off"
+            data-field-target={names?.addressLine1 || 'addressLine1'}
+            data-1p-ignore={disableBrowserAutocomplete ? 'true' : undefined}
+            data-lpignore={disableBrowserAutocomplete ? 'true' : undefined}
+            data-title-case-input={titleCaseAddressLines ? 'true' : undefined}
+            defaultValue={initialValue?.addressLine1 || ''}
+            placeholder={placeholders?.addressLine1}
+            spellCheck={false}
+            onChange={titleCaseAddressLines ? (event) => {
+              maybeFormatTitleCaseControl(event.currentTarget);
+            } : undefined}
+            onBlur={titleCaseAddressLines ? (event) => {
+              formatTitleCaseControl(event.currentTarget);
+            } : undefined}
+          />
           <FieldError error={pickError(errors, names?.addressLine1)} />
         </div>
       ) : null}
@@ -385,7 +464,25 @@ export function MalaysiaAddressFields({
       {showAddressLine2 ? (
         <div>
           <label className="label">{labels?.addressLine2 || 'Address line 2'}</label>
-          <input className="input" name={names?.addressLine2} defaultValue={initialValue?.addressLine2 || ''} placeholder={placeholders?.addressLine2} />
+          <input
+            className="input"
+            name={names?.addressLine2}
+            autoComplete={browserAutocompleteValue}
+            autoCorrect="off"
+            data-field-target={names?.addressLine2 || 'addressLine2'}
+            data-1p-ignore={disableBrowserAutocomplete ? 'true' : undefined}
+            data-lpignore={disableBrowserAutocomplete ? 'true' : undefined}
+            data-title-case-input={titleCaseAddressLines ? 'true' : undefined}
+            defaultValue={initialValue?.addressLine2 || ''}
+            placeholder={placeholders?.addressLine2}
+            spellCheck={false}
+            onChange={titleCaseAddressLines ? (event) => {
+              maybeFormatTitleCaseControl(event.currentTarget);
+            } : undefined}
+            onBlur={titleCaseAddressLines ? (event) => {
+              formatTitleCaseControl(event.currentTarget);
+            } : undefined}
+          />
           <FieldError error={pickError(errors, names?.addressLine2)} />
         </div>
       ) : null}
@@ -401,6 +498,7 @@ export function MalaysiaAddressFields({
             setStateCode(nextCode);
             setStateName(option?.name || '');
             setCityName('');
+            setCityResolvedFromOption(false);
             setPostcode('');
             setPostcodeWarning(null);
           }}
@@ -414,8 +512,14 @@ export function MalaysiaAddressFields({
           allowCustom={allowCustomCity}
           customHint={labels?.customCityHint}
           error={pickError(errors, names?.cityName, 'city')}
-          onChange={(nextCityName) => {
+          inputId={citySearchKey}
+          inputName={citySearchKey}
+          autoComplete={disableBrowserAutocomplete ? 'off' : undefined}
+          onChange={(nextCityName, option) => {
             setCityName(nextCityName);
+            setCityResolvedFromOption(Boolean(option));
+            setPostcode('');
+            setPostcodeWarning(null);
           }}
         />
         <MalaysiaPostcodeCombobox
@@ -426,7 +530,12 @@ export function MalaysiaAddressFields({
           placeholder={labels?.postcodePlaceholder || 'e.g. 40100'}
           required={required?.postcode}
           error={pickError(errors, names?.postcode, 'postcode')}
-          warning={postcodeWarning || labels?.postcodeWarning || null}
+          warning={postcodeWarning}
+          autoResolveFromCity={autoResolvePostcodeFromCity && cityResolvedFromOption}
+          unverifiedWarningMessage={labels?.postcodeWarning}
+          inputId={postcodeSearchKey}
+          inputName={postcodeSearchKey}
+          autoComplete={disableBrowserAutocomplete ? 'off' : undefined}
           onWarningChange={setPostcodeWarning}
           onChange={setPostcode}
           onSelectSuggestion={(suggestion) => {

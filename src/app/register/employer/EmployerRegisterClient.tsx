@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
+import { formatTitleCaseControl, maybeFormatTitleCaseControl } from '@/lib/input-formatting';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
-import { focusFirstFieldError, formatOtpCountdown } from '@/lib/public-registration-client';
+import { focusFirstFieldError, formatOtpCountdown, getEmployerOtpValidationErrors } from '@/lib/public-registration-client';
 import { PublicLocale, publicDict } from '@/lib/public-i18n';
 import { validateEmployerRegistrationDraft } from '@/lib/public-registration-validation';
 
@@ -22,6 +23,7 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
   const [otpCode, setOtpCode] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [otpValidationItems, setOtpValidationItems] = useState<string[]>([]);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [otpFormReady, setOtpFormReady] = useState(false);
@@ -64,32 +66,49 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
     return validation.ok;
   }
 
-  function handleInvalidOtpAttempt() {
-    if (!formRef.current) return;
+  async function handleInvalidOtpAttempt(serverFieldErrors: FieldErrors = {}) {
+    if (!formRef.current) return { ok: false, fieldErrors: {}, items: [] };
+    formatEmployerRegistrationTitleCaseFields(formRef.current);
     setHasTriedOtp(true);
-    setError(t.completeRequiredBeforeOtp);
-    const validation = validateEmployerRegistrationDraft(new FormData(formRef.current));
-    if (!validation.ok) {
-      setFieldErrors((current) => ({
-        ...preserveServerOnlyErrors(current, ['companyLogo', 'otpCode']),
-        ...validation.fieldErrors,
-      }));
-      focusFirstFieldError(formRef.current, validation.fieldErrors);
-      setOtpFormReady(false);
+    const validation = await getEmployerOtpValidationErrors(formRef.current, locale, serverFieldErrors);
+    applyOtpValidationState(validation.fieldErrors, validation.items, validation.ok);
+    return validation;
+  }
+
+  function applyOtpValidationState(nextFieldErrors: FieldErrors, nextItems: string[], ok: boolean) {
+    setOtpFormReady(ok);
+    if (ok) {
+      setOtpValidationItems([]);
+      setError(null);
+      return;
     }
+
+    if (!formRef.current) return;
+
+    setFieldErrors((current) => ({
+      ...preserveServerOnlyErrors(current, ['companyLogo', 'otpCode']),
+      ...nextFieldErrors,
+    }));
+    setOtpValidationItems(nextItems);
+    setError(nextItems.length > 0 ? t.otpValidationHeading : t.completeRequiredBeforeOtp);
+    focusFirstFieldError(formRef.current, nextFieldErrors);
   }
 
   async function sendOtp() {
     if (!formRef.current || isSendingOtp) return;
-    const validation = validateEmployerRegistrationDraft(new FormData(formRef.current));
+    setIsSendingOtp(true);
+    formatEmployerRegistrationTitleCaseFields(formRef.current);
+    const validation = await getEmployerOtpValidationErrors(formRef.current, locale);
     setOtpFormReady(validation.ok);
     if (!validation.ok) {
-      handleInvalidOtpAttempt();
+      setIsSendingOtp(false);
+      setHasTriedOtp(true);
+      applyOtpValidationState(validation.fieldErrors, validation.items, false);
       return;
     }
 
-    setIsSendingOtp(true);
     setError(null);
+    setOtpValidationItems([]);
     setFieldErrors({});
     const body = new FormData(formRef.current);
     body.set('purpose', 'EMPLOYER_REGISTER');
@@ -99,10 +118,7 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
     setIsSendingOtp(false);
     if (!res.ok || !data.ok) {
       if (data.error === 'REGISTRATION_INCOMPLETE' && data.fieldErrors) {
-        setHasTriedOtp(true);
-        setFieldErrors(data.fieldErrors || {});
-        setError(data.message || t.completeRequiredBeforeOtp);
-        focusFirstFieldError(formRef.current, data.fieldErrors || {});
+        await handleInvalidOtpAttempt(data.fieldErrors || {});
         return;
       }
       if (data.error === 'OTP_COOLDOWN_ACTIVE') {
@@ -112,15 +128,18 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
         if (typeof data.expiresInSeconds === 'number') {
           setOtpExpiresAtMs(Date.now() + Number(data.expiresInSeconds) * 1000);
         }
+        setOtpValidationItems([]);
         setError(data.message || null);
         return;
       }
+      setOtpValidationItems([]);
       setError(data.message || 'We could not send the OTP.');
       setFieldErrors(data.fieldErrors || {});
       return;
     }
     setStep('otp');
     setMessage(data.message || 'OTP sent.');
+    setOtpValidationItems([]);
     setMaskedPhone(data.maskedPhone || null);
     setOtpExpiresAtMs(Date.now() + Number(data.expiresInSeconds || 300) * 1000);
     setResendAvailableAtMs(Date.now() + Number(data.resendAfterSeconds || 60) * 1000);
@@ -129,8 +148,10 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
 
   async function verifyAndRegister() {
     if (!formRef.current || isVerifying || otpExpired) return;
+    formatEmployerRegistrationTitleCaseFields(formRef.current);
     setIsVerifying(true);
     setError(null);
+    setOtpValidationItems([]);
     setFieldErrors({});
     const body = new FormData(formRef.current);
     body.set('otpCode', otpCode);
@@ -138,10 +159,21 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
     const data = await res.json().catch(() => ({}));
     setIsVerifying(false);
     if (!res.ok || !data.ok) {
-      setError(data.message || 'We could not submit employer registration.');
-      setFieldErrors(data.fieldErrors || {});
+      let nextError = data.message || 'We could not submit employer registration.';
+      let nextItems: string[] = [];
+      let nextFieldErrors = data.fieldErrors || {};
+      if (data.fieldErrors && Object.keys(data.fieldErrors).some((key) => key !== 'otpCode')) {
+        const validation = await getEmployerOtpValidationErrors(formRef.current, locale, data.fieldErrors);
+        nextFieldErrors = validation.fieldErrors;
+        nextItems = validation.items;
+        nextError = validation.items.length > 0 ? t.otpValidationHeading : nextError;
+      }
+
+      setError(nextError);
+      setOtpValidationItems(nextItems);
+      setFieldErrors(nextFieldErrors);
       if (data.fieldErrors && Object.keys(data.fieldErrors).length > 0) {
-        focusFirstFieldError(formRef.current, data.fieldErrors);
+        focusFirstFieldError(formRef.current, nextFieldErrors);
       }
       return;
     }
@@ -173,7 +205,7 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
       </div>
       <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7" onChange={() => { setOtpFormReady(syncOtpReadiness(hasTriedOtp)); setClockMs(Date.now()); }}>
         <Section title="1. Company Details">
-          <Input name="companyName" label={t.companyName} error={fieldErrors.companyName} />
+          <Input name="companyName" label={t.companyName} error={fieldErrors.companyName} titleCase />
           <div className="flex items-start gap-4 rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-ink-200 bg-white">
               {logoPreviewUrl ? (
@@ -244,12 +276,16 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
             }}
             required={{ addressLine1: true, state: true, city: true, postcode: true }}
             initialValue={{ country: 'Malaysia' }}
+            titleCaseAddressLines
+            disableBrowserAutocomplete
+            autocompletePrefix="partimeEmployer"
+            autoResolvePostcodeFromCity
           />
         </Section>
 
         <Section title="2. Contact Person">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Input name="contactPersonName" label={t.contactPerson} error={fieldErrors.contactPersonName} />
+            <Input name="contactPersonName" label={t.contactPerson} error={fieldErrors.contactPersonName} titleCase />
             <Input name="contactPhone" label={t.contactPhone} placeholder="e.g. +60 12-345 6789" error={fieldErrors.contactPhone} inputMode="tel" />
           </div>
           <Input name="contactEmail" label={t.contactEmail} error={fieldErrors.contactEmail} inputMode="email" />
@@ -288,14 +324,23 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
             </div>
           )}
           {message && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>}
-          {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              <p>{error}</p>
+              {otpValidationItems.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5">
+                  {otpValidationItems.map((item) => <li key={item}>{item}</li>)}
+                </ul>
+              ) : null}
+            </div>
+          )}
           <div className="flex flex-wrap gap-3">
             {step === 'form' ? (
               <button
                 type="button"
                 disabled={isSendingOtp}
                 aria-disabled={!otpFormReady || isSendingOtp}
-                onClick={otpFormReady ? sendOtp : handleInvalidOtpAttempt}
+                onClick={sendOtp}
                 className={`btn-primary ${!otpFormReady && !isSendingOtp ? 'cursor-not-allowed opacity-60' : ''}`}
               >
                 {isSendingOtp ? t.sendingOtp : otpFormReady ? t.sendOtp : t.completeRequiredFieldsFirst}
@@ -317,11 +362,25 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="space-y-4"><h2 className="text-base font-semibold text-ink-950">{title}</h2>{children}</section>;
 }
 
-function Input({ name, label, placeholder, error, inputMode, defaultValue }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; defaultValue?: string }) {
+function Input({ name, label, placeholder, error, inputMode, defaultValue, titleCase = false }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; defaultValue?: string; titleCase?: boolean }) {
   return (
     <div>
       <label className="label">{label}</label>
-      <input className="input" name={name} placeholder={placeholder} inputMode={inputMode} defaultValue={defaultValue} />
+      <input
+        className="input"
+        name={name}
+        data-field-target={name}
+        data-title-case-input={titleCase ? 'true' : undefined}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        defaultValue={defaultValue}
+        onChange={titleCase ? (event) => {
+          maybeFormatTitleCaseControl(event.currentTarget);
+        } : undefined}
+        onBlur={titleCase ? (event) => {
+          formatTitleCaseControl(event.currentTarget);
+        } : undefined}
+      />
       <FieldError error={error} />
     </div>
   );
@@ -333,4 +392,10 @@ function FieldError({ error }: { error?: string }) {
 
 function preserveServerOnlyErrors(fieldErrors: FieldErrors, keys: string[]): FieldErrors {
   return Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => keys.includes(key)));
+}
+
+function formatEmployerRegistrationTitleCaseFields(form: HTMLFormElement): void {
+  for (const control of Array.from(form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-title-case-input="true"]'))) {
+    formatTitleCaseControl(control);
+  }
 }
