@@ -109,8 +109,11 @@ const steps = [
   ['Get Paid Manually', 'Get paid directly by the employer after the job.'],
 ];
 
-export default async function Home({ searchParams }: { searchParams: { lang?: string; location?: string; skill?: string; date?: string } }) {
-  const locale = normalizeLocale(searchParams.lang || cookies().get('partime_public_lang')?.value);
+export default async function Home(
+  props: { searchParams: Promise<{ lang?: string; location?: string; skill?: string; date?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const locale = normalizeLocale(searchParams.lang || (await cookies()).get('partime_public_lang')?.value);
   const t = copy[locale];
   const [jobs, activeJobs, partTimers, employers, offerRecipients, repliedRecipients] = await Promise.all([
     listPublicJobs({ location: searchParams.location, skill: searchParams.skill, date: searchParams.date }, 8),

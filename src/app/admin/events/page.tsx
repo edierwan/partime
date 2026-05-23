@@ -10,9 +10,10 @@ import { EventClient, EventToggle } from './EventClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function EventsPage({
-  searchParams,
-}: { searchParams: { q?: string; status?: string; selected?: string } }) {
+export default async function EventsPage(
+  props: { searchParams: Promise<{ q?: string; status?: string; selected?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q || '').trim();
   const status = searchParams.status || 'all';
   const where: any = {};

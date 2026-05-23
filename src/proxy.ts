@@ -21,10 +21,9 @@ async function isAuthed(req: NextRequest): Promise<boolean> {
   }
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Public paths
   if (
     pathname.startsWith('/scan') ||
     pathname.startsWith('/jobs') ||

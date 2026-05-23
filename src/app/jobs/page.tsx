@@ -17,8 +17,11 @@ const fallbackImages = [
   'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80',
 ];
 
-export default async function JobsPage({ searchParams }: { searchParams: { lang?: string; q?: string; location?: string; stateCode?: string; state?: string; city?: string; category?: string; skill?: string; date?: string; payType?: string; minRate?: string; openOnly?: string; interest?: string } }) {
-  const locale = normalizeLocale(searchParams.lang || cookies().get('partime_public_lang')?.value);
+export default async function JobsPage(
+  props: { searchParams: Promise<{ lang?: string; q?: string; location?: string; stateCode?: string; state?: string; city?: string; category?: string; skill?: string; date?: string; payType?: string; minRate?: string; openOnly?: string; interest?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const locale = normalizeLocale(searchParams.lang || (await cookies()).get('partime_public_lang')?.value);
   const [jobs, skills] = await Promise.all([
     listPublicJobs(searchParams, 60),
     prisma.skill.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }], take: 80 }),

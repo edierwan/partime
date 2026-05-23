@@ -7,7 +7,8 @@ import { EmployerActions } from './EmployerActions';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function EmployersPage({ searchParams }: { searchParams: { q?: string; status?: string } }) {
+export default async function EmployersPage(props: { searchParams: Promise<{ q?: string; status?: string }> }) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q || '').trim();
   const status = searchParams.status || 'all';
   const where: any = {};

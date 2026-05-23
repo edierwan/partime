@@ -5,8 +5,9 @@ import { normalizeLocale, publicDict } from '@/lib/public-i18n';
 
 export const dynamic = 'force-dynamic';
 
-export default function RegisterEntryPage({ searchParams }: { searchParams: { lang?: string } }) {
-  const locale = normalizeLocale(searchParams.lang || cookies().get('partime_public_lang')?.value);
+export default async function RegisterEntryPage(props: { searchParams: Promise<{ lang?: string }> }) {
+  const searchParams = await props.searchParams;
+  const locale = normalizeLocale(searchParams.lang || (await cookies()).get('partime_public_lang')?.value);
   const t = publicDict[locale];
   const langQuery = `?lang=${locale}`;
 

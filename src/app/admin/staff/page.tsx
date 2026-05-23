@@ -10,9 +10,10 @@ import { listSkillCatalog } from '@/lib/skills';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function StaffPage({
-  searchParams,
-}: { searchParams: { q?: string; filter?: string; skillId?: string; nationality?: string } }) {
+export default async function StaffPage(
+  props: { searchParams: Promise<{ q?: string; filter?: string; skillId?: string; nationality?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const q = (searchParams.q || '').trim();
   const filter = searchParams.filter || 'all';
   const skillId = searchParams.skillId || 'all';

@@ -11,8 +11,12 @@ export const revalidate = 0;
 
 const fallbackImage = 'https://images.unsplash.com/photo-1556741533-6e6a62bd8b49?auto=format&fit=crop&w=1200&q=80';
 
-export default async function JobDetailPage({ params, searchParams }: { params: { id: string }; searchParams: { lang?: string; interest?: string } }) {
-  const locale = normalizeLocale(searchParams.lang || cookies().get('partime_public_lang')?.value);
+export default async function JobDetailPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ lang?: string; interest?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const locale = normalizeLocale(searchParams.lang || (await cookies()).get('partime_public_lang')?.value);
   const job = await getPublicJobBySlugOrId(params.id);
   if (!job) notFound();
   const href = jobPublicHref(job);

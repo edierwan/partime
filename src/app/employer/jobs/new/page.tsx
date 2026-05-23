@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db';
 import { JOB_CATEGORIES } from '@/lib/marketplace';
 import { createEmployerJob } from '../actions';
 
-export default async function NewEmployerJobPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function NewEmployerJobPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   const skills = await prisma.skill.findMany({ where: { active: true }, orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }], take: 80 });
   return (
     <div className="space-y-5">

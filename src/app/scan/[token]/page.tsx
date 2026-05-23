@@ -7,7 +7,8 @@ import { ScanClient } from './ScanClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function ScanPage({ params }: { params: { token: string } }) {
+export default async function ScanPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const event = await prisma.workEvent.findUnique({ where: { scanToken: params.token } });
   if (!event) notFound();
 

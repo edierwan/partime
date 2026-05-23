@@ -3,7 +3,8 @@ import { prisma } from '@/lib/db';
 import { currentAdminTenantId } from '@/lib/tenant';
 import { formatJobDate, formatJobRate } from '@/lib/marketplace';
 
-export default async function EmployerJobsPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function EmployerJobsPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   const tenantId = await currentAdminTenantId();
   const jobs = await prisma.workEvent.findMany({
     where: tenantId ? { tenantId } : {},

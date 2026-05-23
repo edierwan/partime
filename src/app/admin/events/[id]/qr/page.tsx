@@ -8,7 +8,8 @@ import { PrintButtons } from './PrintButtons';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function EventQrPage({ params }: { params: { id: string } }) {
+export default async function EventQrPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const event = await prisma.workEvent.findUnique({ where: { id: params.id } });
   if (!event) notFound();
 

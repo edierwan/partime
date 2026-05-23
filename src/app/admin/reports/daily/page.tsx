@@ -11,7 +11,8 @@ export const revalidate = 0;
 
 type SP = { date?: string; eventId?: string; tenantId?: string };
 
-export default async function DailyReportPage({ searchParams }: { searchParams: SP }) {
+export default async function DailyReportPage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const date = searchParams.date ? parseDateInput(searchParams.date) : now;
   const dayStart = mytStartOfDay(date);

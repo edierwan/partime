@@ -4,7 +4,8 @@ import { readStoredUpload } from '@/lib/uploads';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: NextRequest, { params }: { params: { parts: string[] } }) {
+export async function GET(_req: NextRequest, props: { params: Promise<{ parts: string[] }> }) {
+  const params = await props.params;
   const key = (params.parts || []).join('/');
   if (!key) return new Response('Not found', { status: 404 });
 

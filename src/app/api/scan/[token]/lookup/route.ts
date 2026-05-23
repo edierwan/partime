@@ -6,7 +6,8 @@ import { normalizeAliasPanggilan, normalizeMalaysiaPhone } from '@/lib/staff';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const event = await prisma.workEvent.findUnique({ where: { scanToken: params.token }, include: { tenant: true } });
   if (!event || !event.active) {
     return NextResponse.json({ ok: false, error: 'Event not available' }, { status: 200 });

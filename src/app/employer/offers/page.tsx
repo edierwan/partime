@@ -4,7 +4,10 @@ import { OFFER_STATUS_LABELS } from '@/lib/marketplace';
 import { defaultOfferMessage } from '@/lib/offer-messages';
 import { sendJobOffer } from './actions';
 
-export default async function EmployerOffersPage({ searchParams }: { searchParams: { jobId?: string; partTimerId?: string | string[]; sent?: string; total?: string; error?: string } }) {
+export default async function EmployerOffersPage(
+  props: { searchParams: Promise<{ jobId?: string; partTimerId?: string | string[]; sent?: string; total?: string; error?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const tenantId = await currentAdminTenantId();
   const offers = await prisma.jobOffer.findMany({ where: tenantId ? { tenantId } : {}, include: { job: true, recipients: { include: { partTimer: true } } }, orderBy: { createdAt: 'desc' }, take: 100 });
   const selectedIds = Array.isArray(searchParams.partTimerId) ? searchParams.partTimerId : searchParams.partTimerId ? [searchParams.partTimerId] : [];

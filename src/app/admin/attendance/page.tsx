@@ -14,7 +14,8 @@ export const revalidate = 0;
 
 type SP = { from?: string; to?: string; eventId?: string; status?: string; q?: string; tenantId?: string };
 
-export default async function AttendancePage({ searchParams }: { searchParams: SP }) {
+export default async function AttendancePage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const fromDate = searchParams.from ? parseDateInput(searchParams.from) : new Date(mytStartOfDay(now).getTime() - 6 * 24 * 60 * 60 * 1000);
   const toDate   = searchParams.to   ? new Date(mytEndOfDay(parseDateInput(searchParams.to)).getTime()) : mytEndOfDay(now);

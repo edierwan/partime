@@ -12,7 +12,8 @@ function clientIp(req: Request): string | null {
   return req.headers.get('x-real-ip');
 }
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const event = await prisma.workEvent.findUnique({ where: { scanToken: params.token } });
   if (!event || !event.active) {
     return NextResponse.json({ ok: false, error: 'Event not available' });

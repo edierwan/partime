@@ -5,11 +5,12 @@ import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: { next?: string };
-}) {
+export default async function LoginPage(
+  props: {
+    searchParams: Promise<{ next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const s = await getSession();
   if (s) redirect(searchParams.next || '/admin');
   return (

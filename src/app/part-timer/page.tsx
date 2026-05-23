@@ -6,7 +6,8 @@ import { PartTimerLookup } from './PartTimerLookup';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function PartTimerHomePage({ searchParams }: { searchParams: { phone?: string } }) {
+export default async function PartTimerHomePage(props: { searchParams: Promise<{ phone?: string }> }) {
+  const searchParams = await props.searchParams;
   const phone = normalizeMalaysiaPhone(searchParams.phone || '');
   const partTimer = phone ? await prisma.staff.findUnique({ where: { phoneE164: phone }, include: { portfolioMedia: true, offerRecipients: true, jobInterests: true, sessions: true } }) : null;
   return (

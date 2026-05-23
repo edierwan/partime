@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db';
 import { formatJobDate, formatJobRate, jobPublicHref } from '@/lib/marketplace';
 import { setEmployerJobStatus } from '../actions';
 
-export default async function EmployerJobDetailPage({ params }: { params: { id: string } }) {
+export default async function EmployerJobDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [job, partTimers] = await Promise.all([
     prisma.workEvent.findUnique({
       where: { id: params.id },

@@ -12,7 +12,8 @@ export const revalidate = 0;
 
 type SP = { week?: string; eventId?: string; staffId?: string; tenantId?: string };
 
-export default async function WeeklyPayrollPage({ searchParams }: { searchParams: SP }) {
+export default async function WeeklyPayrollPage(props: { searchParams: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   const now = new Date();
   const base = searchParams.week ? parseDateInput(searchParams.week) : now;
   const weekStart = mytStartOfWeek(base);
