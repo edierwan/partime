@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { Badge } from '@/components/Badge';
 import { StatusBadge } from '@/components/Badge';
-import { formatHours, formatMYR, maskAccount } from '@/lib/money';
+import { Avatar } from '@/components/Avatar';
+import { formatHours, formatMYR } from '@/lib/money';
+import { formatMalaysiaPhoneDisplay, maskBankAccountNumber, resolveBankName } from '@/lib/staff';
 import { formatDate, formatTime } from '@/lib/time';
 
 interface Row {
@@ -17,7 +19,19 @@ interface Row {
 export function WeeklyExpand({
   staff, rows, totals,
 }: {
-  staff: { id: string; payName: string; alias: string; fullName: string; phone: string; bankName: string | null; bankAccount: string | null };
+  staff: {
+    id: string;
+    payName: string;
+    aliasPanggilan: string;
+    fullName: string;
+    phoneE164: string;
+    phoneDisplay: string | null;
+    bankCode: string | null;
+    bankName: string | null;
+    customBankName: string | null;
+    bankAccountNumber: string | null;
+    profileImageUrl: string | null;
+  };
   rows: Row[];
   totals: { days: number; gross: number; deduct: number; payable: number; pay: number; hasMissing: boolean };
 }) {
@@ -28,12 +42,20 @@ export function WeeklyExpand({
         <td className="w-8">
           <button onClick={() => setOpen((v) => !v)} className="text-ink-500 hover:text-ink-900">{open ? '▾' : '▸'}</button>
         </td>
-        <td className="font-medium">{staff.payName}</td>
-        <td className="text-ink-600 uppercase text-xs">{staff.alias}</td>
+        <td>
+          <div className="flex items-center gap-2">
+            <Avatar name={staff.fullName} src={staff.profileImageUrl} className="h-8 w-8 text-[10px]" />
+            <div>
+              <div className="font-medium">{staff.payName}</div>
+              <div className="text-xs text-ink-500">{staff.fullName}</div>
+            </div>
+          </div>
+        </td>
+        <td className="text-ink-600 uppercase text-xs">{staff.aliasPanggilan}</td>
         <td>{staff.fullName}</td>
-        <td className="text-ink-600">{staff.phone}</td>
-        <td>{staff.bankName || '—'}</td>
-        <td className="text-ink-600">{maskAccount(staff.bankAccount)}</td>
+        <td className="text-ink-600">{staff.phoneDisplay || formatMalaysiaPhoneDisplay(staff.phoneE164)}</td>
+        <td>{resolveBankName(staff.bankCode, staff.bankName, staff.customBankName) || '—'}</td>
+        <td className="text-ink-600">{maskBankAccountNumber(staff.bankAccountNumber)}</td>
         <td className="text-right">{totals.days}</td>
         <td className="text-right">{formatHours(totals.gross)}</td>
         <td className="text-right">{formatHours(totals.deduct)}</td>
@@ -41,7 +63,7 @@ export function WeeklyExpand({
         <td className="text-right font-semibold">{formatMYR(totals.pay)}</td>
         <td className="space-x-1">
           {totals.hasMissing && <Badge variant="red">Missing Clock-out</Badge>}
-          {!staff.bankAccount && <Badge variant="amber">Missing Bank Info</Badge>}
+          {(!staff.bankCode || !staff.bankAccountNumber) && <Badge variant="amber">Missing Bank Info</Badge>}
         </td>
       </tr>
       {open && (

@@ -26,6 +26,7 @@ Visual reference: the attached mockup screenshots. Match the look closely.
 - `StatCard` — icon chip + label + big number + delta hint.
 - `Badge` — colored pill (OPEN, COMPLETED, MISSING CLOCK OUT, MANUAL
   ADJUSTED, CANCELLED, ACTIVE, INACTIVE, MISSING BANK INFO).
+- `Avatar` — profile photo with initials fallback.
 - `DataTable` — header row in zinc-50, dividers, hover.
 - `SlideOver` — fixed right panel with header + scrollable body + sticky
   footer (Cancel / Save).
@@ -35,11 +36,18 @@ Visual reference: the attached mockup screenshots. Match the look closely.
 ## Public scan page
 - Full-width mobile container, padded.
 - Event card with calendar icon + name + location + date + hourly rate.
-- Step 1: phone/alias input with **Find Me** button.
+- Step 1: phone/email/alias input with **Find Me** button.
 - Step 2: staff found card (avatar + name + staff ID + current status).
 - Step 3: big primary button (Clock In / Clock Out).
 - Step 4: success card with all calculated values.
+- Pending-review message is shown inline when clock-in is blocked.
 - Footer note: "Break is auto-deducted based on company policy."
+
+## Public registration page
+- Public card-based form, same visual system as login / scan.
+- Profile photo preview with initials fallback.
+- IC field shows derived gender helper text.
+- WhatsApp OTP step appears inline after form validation succeeds.
 
 ## Tables
 - Sticky header on long tables.

@@ -18,12 +18,21 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 |---|---|---|
 | id | String (cuid) | PK |
 | payName | String | short payroll name |
-| alias | String unique | match key (uppercase trim) |
+| aliasPanggilan | String unique | match key (uppercase trim) |
 | fullName | String | legal full name |
-| phone | String unique | normalized digits |
+| icNumberNormalized | String? unique | normalized 12-digit IC |
+| icNumberDisplay | String? | display-ready IC |
+| gender | Enum | `LELAKI / PEREMPUAN / UNKNOWN` |
+| phoneE164 | String unique | normalized `+60...` mobile |
+| phoneDisplay | String? | human-friendly display |
+| email | String? unique | optional |
+| bankCode | String? | known bank code |
 | bankName | String? | |
-| bankAccount | String? | masked in UI |
-| hourlyRateCents | Int | default rate (MYR cents) |
+| customBankName | String? | when bank = OTHER |
+| bankAccountNumber | String? | masked in UI |
+| profileImageUrl | String? | public or local URL |
+| profileImageKey | String? | storage key |
+| approvalStatus | Enum | `APPROVED / PENDING_REVIEW / REJECTED` |
 | active | Boolean | default true |
 | notes | String? | |
 | createdAt / updatedAt | DateTime | |
@@ -63,6 +72,24 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 
 Unique: `(eventId, staffId, workDate)` to prevent duplicate open per day.
 
+### StaffOtp
+| field | type | notes |
+|---|---|---|
+| id | String | PK |
+| phoneE164 | String | OTP target |
+| codeHash | String | hashed 4-digit OTP |
+| purpose | Enum | `STAFF_REGISTER` |
+| expiresAt | DateTime | 5-minute expiry |
+| consumedAt | DateTime? | null until verified |
+| attemptCount | Int | invalid-attempt counter |
+| maxAttempts | Int | default 5 |
+| requestIp | String? | rate limit tracking |
+| userAgent | String? | audit |
+| sendStatus | String? | `PENDING / SENT / FAILED` |
+| sendError | String? | provider error summary |
+| payloadJson | Json? | safe metadata only |
+| createdAt | DateTime | |
+
 ### ScanLog
 | field | type | notes |
 |---|---|---|
@@ -88,8 +115,8 @@ Unique: `(eventId, staffId, workDate)` to prevent duplicate open per day.
 | afterJson | Json | snapshot after |
 
 ### AppSetting (key/value)
-- `defaultHourlyRateCents`
 - `breakRuleVersion`
+- `allow_pending_staff_clock_in`
 
 ## Status flow
 `OPEN` → on clock-out → `COMPLETED`.
@@ -102,6 +129,7 @@ Admin cancel → `CANCELLED` (excluded from payroll totals).
 - Money stored as `Int` cents.
 - Hours stored as `Int` minutes; rendered as `(min / 60).toFixed(2)`.
 - Total pay cents = `round(payableMinutes / 60 * rateCents)`.
+- Staff no longer store a default hourly rate; the source of truth is `WorkEvent.defaultRateCents`.
 
 ## Timezone
 - All DB timestamps are UTC.

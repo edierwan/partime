@@ -1,9 +1,12 @@
 import { getSession } from '@/lib/auth';
+import { ALLOW_PENDING_CLOCK_IN_KEY, getBooleanAppSetting } from '@/lib/app-settings';
+import { saveScanSettings } from './actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const s = await getSession();
+  const allowPendingClockIn = await getBooleanAppSetting(ALLOW_PENDING_CLOCK_IN_KEY, false);
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
@@ -27,6 +30,21 @@ export default async function SettingsPage() {
           <li>• Gross 8 hours or more → <b>60 minutes</b> deduct</li>
         </ul>
       </div>
+
+      <form action={saveScanSettings} className="card card-pad space-y-4">
+        <div>
+          <div className="font-semibold">Scan Access</div>
+          <p className="text-sm text-ink-500 mt-1">Control whether self-registered staff in pending review can clock in before final admin approval.</p>
+        </div>
+        <label className="flex items-start gap-3 rounded-2xl border border-ink-200 px-4 py-3">
+          <input type="checkbox" name="allowPendingClockIn" defaultChecked={allowPendingClockIn} className="mt-1 h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500" />
+          <span>
+            <span className="block text-sm font-medium text-ink-900">Allow pending-review staff to clock in</span>
+            <span className="block text-xs text-ink-500 mt-1">When disabled, pending staff can still look up their profile on the scan page but clock-in remains blocked.</span>
+          </span>
+        </label>
+        <button type="submit" className="btn-primary">Save Scan Settings</button>
+      </form>
 
       <div className="card card-pad space-y-2">
         <div className="font-semibold">About Partime</div>

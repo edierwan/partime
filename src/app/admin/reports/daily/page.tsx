@@ -2,7 +2,9 @@ import { prisma } from '@/lib/db';
 import { StatCard } from '@/components/StatCard';
 import { PrintButton } from '@/components/PrintButton';
 import { formatDate, formatTime, mytStartOfDay, mytEndOfDay, mytStartOfWeek, mytEndOfWeek, parseDateInput, formatDayShort } from '@/lib/time';
-import { formatMYR, formatHours, maskAccount } from '@/lib/money';
+import { formatMYR, formatHours } from '@/lib/money';
+import { Avatar } from '@/components/Avatar';
+import { formatMalaysiaPhoneDisplay, maskBankAccountNumber, resolveBankName } from '@/lib/staff';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -119,12 +121,20 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
               {sessions.length === 0 && <tr><td colSpan={11} className="text-center py-10 text-ink-500">No attendance for this date.</td></tr>}
               {sessions.map((s) => (
                 <tr key={s.id}>
-                  <td className="font-medium">{s.staff.payName}</td>
-                  <td className="text-ink-600 uppercase text-xs">{s.staff.alias}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <Avatar name={s.staff.fullName} src={s.staff.profileImageUrl} className="h-8 w-8 text-[10px]" />
+                      <div>
+                        <div className="font-medium">{s.staff.payName}</div>
+                        <div className="text-xs text-ink-500">{s.staff.fullName}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="text-ink-600 uppercase text-xs">{s.staff.aliasPanggilan}</td>
                   <td>{s.staff.fullName}</td>
-                  <td className="text-ink-600">{s.staff.phone}</td>
-                  <td>{s.staff.bankName || '—'}</td>
-                  <td className="text-ink-600">{maskAccount(s.staff.bankAccount)}</td>
+                  <td className="text-ink-600">{s.staff.phoneDisplay || formatMalaysiaPhoneDisplay(s.staff.phoneE164)}</td>
+                  <td>{resolveBankName(s.staff.bankCode, s.staff.bankName, s.staff.customBankName) || '—'}</td>
+                  <td className="text-ink-600">{maskBankAccountNumber(s.staff.bankAccountNumber)}</td>
                   <td>{formatTime(s.clockInAt)}</td>
                   <td>{s.clockOutAt ? formatTime(s.clockOutAt) : '–'}</td>
                   <td className="text-right">{formatHours(s.breakDeductMinutes)}</td>

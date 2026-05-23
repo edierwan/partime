@@ -36,10 +36,14 @@ totalPayCents = round(payableMinutes / 60 * hourlyRateSnapshotCents)
 ```
 
 ## Hourly rate snapshot
-- Captured on **clock-in** from event's `defaultRateCents`
-  (falls back to staff `hourlyRateCents` if zero).
+- Captured on **clock-in** from event's `defaultRateCents` only.
 - Admin override updates `hourlyRateSnapshotCents` on the specific session
   only — never bulk-rewrites history.
+
+## Pending review rule
+- `PENDING_REVIEW` staff can be looked up on the scan page.
+- Clock-in is blocked unless app setting `allow_pending_staff_clock_in = true`.
+- Existing open sessions can still clock out.
 
 ## Exclusions from payroll totals
 - `MISSING_CLOCK_OUT` sessions (until fixed).

@@ -19,24 +19,47 @@ model AdminUser {
   adjustments  AttendanceAdjustmentAudit[]
 }
 
+enum StaffGender {
+  LELAKI
+  PEREMPUAN
+  UNKNOWN
+}
+
+enum StaffApprovalStatus {
+  APPROVED
+  PENDING_REVIEW
+  REJECTED
+}
+
 model Staff {
-  id              String   @id @default(cuid())
-  payName         String
-  alias           String   @unique
-  fullName        String
-  phone           String   @unique
-  bankName        String?
-  bankAccount     String?
-  hourlyRateCents Int      @default(0)
-  active          Boolean  @default(true)
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                 String              @id @default(cuid())
+  payName            String
+  aliasPanggilan     String              @unique @map("alias")
+  fullName           String
+  icNumberNormalized String?             @unique
+  icNumberDisplay    String?
+  gender             StaffGender         @default(UNKNOWN)
+  phoneE164          String              @unique @map("phone")
+  phoneDisplay       String?
+  email              String?             @unique
+  bankCode           String?
+  bankName           String?
+  customBankName     String?
+  bankAccountNumber  String?             @map("bankAccount")
+  profileImageUrl    String?
+  profileImageKey    String?
+  approvalStatus     StaffApprovalStatus @default(APPROVED)
+  active             Boolean             @default(true)
+  notes              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
-  sessions        AttendanceSession[]
-  scanLogs        ScanLog[]
+  sessions           AttendanceSession[]
+  scanLogs           ScanLog[]
 
+  @@index([fullName])
   @@index([active])
+  @@index([approvalStatus])
 }
 
 model WorkEvent {
@@ -117,6 +140,31 @@ model ScanLog {
   createdAt DateTime   @default(now())
 
   @@index([createdAt])
+}
+
+enum OtpPurpose {
+  STAFF_REGISTER
+}
+
+model StaffOtp {
+  id           String     @id @default(cuid())
+  phoneE164    String
+  codeHash     String
+  purpose      OtpPurpose
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  attemptCount Int        @default(0)
+  maxAttempts  Int        @default(5)
+  requestIp    String?
+  userAgent    String?
+  sendStatus   String?
+  sendError    String?
+  payloadJson  Json?
+  createdAt    DateTime   @default(now())
+
+  @@index([phoneE164, createdAt])
+  @@index([requestIp, createdAt])
+  @@index([purpose, createdAt])
 }
 
 model AttendanceAdjustmentAudit {

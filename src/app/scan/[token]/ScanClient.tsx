@@ -1,12 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import { Avatar } from '@/components/Avatar';
 
 interface LookupResult {
   ok: boolean;
   error?: string;
-  staff?: { id: string; fullName: string; payName: string; alias: string };
+  staff?: {
+    id: string;
+    fullName: string;
+    payName: string;
+    aliasPanggilan: string;
+    approvalStatus: 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
+    profileImageUrl?: string | null;
+  };
   openSession?: { id: string; clockInAt: string };
+  canClockIn?: boolean;
+  warning?: string | null;
 }
 
 interface ActionResult {
@@ -101,11 +111,11 @@ export function ScanClient({ token, eventName }: { token: string; eventName: str
   return (
     <div className="card card-pad">
       <form onSubmit={onFind} className="space-y-3">
-        <label className="label">Enter your phone number or alias</label>
+        <label className="label">Enter your phone number, email, or alias</label>
         <input
           autoFocus className="input"
           inputMode="tel"
-          placeholder="012-345 6789 or your alias"
+          placeholder="012-345 6789, your@email.com, or your alias"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           required
@@ -123,10 +133,18 @@ export function ScanClient({ token, eventName }: { token: string; eventName: str
         <div className="mt-5 space-y-3">
           <div className="card card-pad bg-ink-50/50">
             <div className="text-xs text-emerald-700 mb-1">● Staff Found</div>
-            <div className="font-semibold">{lookup.staff.fullName}</div>
-            <div className="text-xs text-ink-500">Staff ID: {lookup.staff.alias}</div>
+            <div className="flex items-center gap-3">
+              <Avatar name={lookup.staff.fullName} src={lookup.staff.profileImageUrl} className="h-12 w-12 text-sm" />
+              <div>
+                <div className="font-semibold">{lookup.staff.fullName}</div>
+                <div className="text-xs text-ink-500">Staff ID: {lookup.staff.aliasPanggilan}</div>
+              </div>
+            </div>
             {lookup.openSession && (
               <div className="text-xs text-emerald-700 mt-1">● Currently clocked in at {fmtTime(lookup.openSession.clockInAt)}</div>
+            )}
+            {lookup.warning && (
+              <div className="text-xs text-amber-700 mt-2">{lookup.warning}</div>
             )}
           </div>
 
@@ -135,6 +153,10 @@ export function ScanClient({ token, eventName }: { token: string; eventName: str
               className="btn w-full bg-rose-500 text-white hover:bg-rose-600 py-3 text-base">
               {loading ? 'Working…' : '⏏ Clock Out'}
             </button>
+          ) : !lookup.canClockIn ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Clock-in is currently blocked for this profile. Please wait for admin approval.
+            </div>
           ) : (
             <button onClick={() => onAction('CLOCK_IN')} disabled={loading}
               className="btn w-full bg-brand-500 text-white hover:bg-brand-600 py-3 text-base">

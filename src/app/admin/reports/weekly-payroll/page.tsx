@@ -4,7 +4,7 @@ import { StatCard } from '@/components/StatCard';
 import { Badge } from '@/components/Badge';
 import { PrintButton } from '@/components/PrintButton';
 import { formatDate, formatTime, mytStartOfWeek, mytEndOfWeek, parseDateInput } from '@/lib/time';
-import { formatMYR, formatHours, maskAccount } from '@/lib/money';
+import { formatMYR, formatHours } from '@/lib/money';
 import { WeeklyExpand } from './WeeklyExpand';
 
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,7 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
     payable: groups.reduce((a, g) => a + g.totals.payable, 0),
     pay:     groups.reduce((a, g) => a + g.totals.pay,     0),
     missing: groups.filter((g) => g.totals.hasMissing).length,
-    missingBank: groups.filter((g) => !g.staff.bankAccount).length,
+    missingBank: groups.filter((g) => !g.staff.bankCode || !g.staff.bankAccountNumber).length,
   };
 
   const csvParams = new URLSearchParams({ week: searchParams.week || isoDate(weekStart) });

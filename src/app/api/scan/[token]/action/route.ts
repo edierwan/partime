@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { mytStartOfDay, mytEndOfDay } from '@/lib/time';
 import { recalc } from '@/lib/calc';
+import { ALLOW_PENDING_CLOCK_IN_KEY, getBooleanAppSetting } from '@/lib/app-settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,22 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const staff = await prisma.staff.findUnique({ where: { id: staffId } });
   if (!staff || !staff.active) return NextResponse.json({ ok: false, error: 'Staff not found' });
 
+  const allowPendingClockIn = await getBooleanAppSetting(ALLOW_PENDING_CLOCK_IN_KEY, false);
+  if (action === 'CLOCK_IN') {
+    if (staff.approvalStatus === 'REJECTED') {
+      await prisma.scanLog.create({
+        data: { eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Staff rejected' },
+      });
+      return NextResponse.json({ ok: false, error: 'Your registration is currently rejected. Please contact admin.' });
+    }
+    if (staff.approvalStatus === 'PENDING_REVIEW' && !allowPendingClockIn) {
+      await prisma.scanLog.create({
+        data: { eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Pending review staff blocked from clock-in' },
+      });
+      return NextResponse.json({ ok: false, error: 'Your registration is pending review. You can clock in after admin approval.' });
+    }
+  }
+
   const workDate = mytStartOfDay(now);
   const dayEnd = mytEndOfDay(now);
 
@@ -54,11 +71,10 @@ export async function POST(req: Request, { params }: { params: { token: string }
       });
     }
 
-    const rateCents = event.defaultRateCents > 0 ? event.defaultRateCents : staff.hourlyRateCents;
     const session = await prisma.attendanceSession.create({
       data: {
         eventId: event.id, staffId: staff.id, workDate,
-        clockInAt: now, hourlyRateSnapshotCents: rateCents,
+        clockInAt: now, hourlyRateSnapshotCents: event.defaultRateCents,
         status: 'OPEN',
       },
     });

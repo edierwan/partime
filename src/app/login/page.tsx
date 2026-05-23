@@ -1,6 +1,7 @@
 import LoginForm from './LoginForm';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +23,13 @@ export default async function LoginPage({
           </div>
         </div>
         <LoginForm next={searchParams.next} />
+        <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/70 p-4 text-sm text-ink-700">
+          <div className="font-medium text-ink-900">Register as part-time staff</div>
+          <p className="mt-1 text-ink-600">New staff can submit their profile and verify their WhatsApp number before admin review.</p>
+          <Link href="/register" className="mt-3 inline-flex text-brand-700 font-medium hover:underline">
+            Open staff self-registration
+          </Link>
+        </div>
       </div>
     </div>
   );

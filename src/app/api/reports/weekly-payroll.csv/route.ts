@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db';
 import { mytStartOfWeek, mytEndOfWeek, parseDateInput, formatDate, formatTime } from '@/lib/time';
 import { requireSession } from '@/lib/auth';
+import { formatMalaysiaPhoneDisplay, resolveBankName } from '@/lib/staff';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,8 +31,12 @@ export async function GET(req: Request) {
 
   const header = ['PayName','Alias','FullName','Phone','Bank','AccountNumber','Date','Event','ClockIn','ClockOut','GrossHours','BreakDeductHours','PayableHours','HourlyRate','TotalPay','Status'];
   const rows = sessions.map((s) => [
-    s.staff.payName, s.staff.alias, s.staff.fullName, s.staff.phone,
-    s.staff.bankName ?? '', s.staff.bankAccount ?? '',
+    s.staff.payName,
+    s.staff.aliasPanggilan,
+    s.staff.fullName,
+    s.staff.phoneDisplay || formatMalaysiaPhoneDisplay(s.staff.phoneE164),
+    resolveBankName(s.staff.bankCode, s.staff.bankName, s.staff.customBankName) ?? '',
+    s.staff.bankAccountNumber ?? '',
     formatDate(s.workDate), s.event.name,
     formatTime(s.clockInAt), s.clockOutAt ? formatTime(s.clockOutAt) : '',
     s.grossMinutes != null ? (s.grossMinutes / 60).toFixed(2) : '',

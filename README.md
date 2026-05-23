@@ -4,9 +4,12 @@ Standalone part-time staff attendance and weekly payroll system.
 
 - QR scan clock-in / clock-out from any phone
 - Admin dashboard (staff, events, attendance, weekly + daily reports, exceptions)
+- Staff self-registration with WhatsApp OTP and pending-review approval flow
+- Staff profiles with IC, gender, email, profile photo, and bank validation
 - Auto break-deduct rule, manual adjustments with audit log
 - CSV export and print-friendly reports
-- **No external integrations** (no payment gateway, no bank payout, no Finance app)
+- No payment gateway, bank payout, or finance app integration
+- Optional S3-compatible profile photo storage and Baileys WhatsApp OTP delivery
 
 Stack: Next.js 14 (App Router), TypeScript, Tailwind, Prisma + PostgreSQL, JWT cookie auth (jose).
 
@@ -37,6 +40,19 @@ Open http://localhost:3000 → login with the seeded admin.
 | `SEED_ADMIN_EMAIL` | seed only | `admin@partime.local` |
 | `SEED_ADMIN_PASSWORD` | seed only | strong password |
 | `SEED_SAMPLE_DATA` | optional | `true` to seed 5 sample staff + 1 sample event |
+| `S3_ENDPOINT` | optional | `https://s3.ap-southeast-1.amazonaws.com` or S3-compatible endpoint |
+| `S3_REGION` | optional with S3 | `ap-southeast-1` |
+| `S3_BUCKET` | optional with S3 | `partime-assets` |
+| `S3_ACCESS_KEY_ID` | optional with S3 | access key for uploads |
+| `S3_SECRET_ACCESS_KEY` | optional with S3 | secret key for uploads |
+| `S3_PUBLIC_BASE_URL` | optional with S3 | `https://cdn.example.com` |
+| `LOCAL_UPLOAD_ROOT` | optional | `/app/uploads` |
+| `BAILEYS_API_BASE_URL` | required for OTP | `https://wa.getouch.co` |
+| `BAILEYS_TENANT` | required for OTP | `partime` |
+| `BAILEYS_API_KEY` | required for OTP | Baileys secret / API key |
+| `BAILEYS_DEFAULT_COUNTRY` | optional | `MY` |
+| `BAILEYS_SEND_PATH` | optional | `/api/sessions/{tenant}/messages` |
+| `BAILEYS_AUTH_HEADER` | optional | `X-WAPI-Secret` |
 
 ---
 
@@ -50,6 +66,15 @@ npm run start         # serves on 0.0.0.0:3000
 ```
 
 Output is `output: 'standalone'` — Coolify / Docker friendly.
+
+### Staff self-registration prerequisites
+
+If you want `/register` + WhatsApp OTP to work in production, configure either:
+
+1. S3-compatible storage (`S3_*`) for staff profile photos.
+2. Or local uploads with writable `LOCAL_UPLOAD_ROOT` and a persistent volume.
+
+For OTP delivery, configure the `BAILEYS_*` variables. The GetTouch repo currently confirms the direct Baileys gateway session route `/api/sessions/:id/messages` with `X-WAPI-Secret`, but does not expose a confirmed tenant-only send endpoint. Partime therefore keeps `BAILEYS_SEND_PATH` and `BAILEYS_AUTH_HEADER` env-driven instead of hardcoding an assumed tenant broker route.
 
 ### One-time prod migration & seed
 
@@ -75,6 +100,8 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
    - `AUTH_SECRET` (`openssl rand -hex 32`)
    - `NEXT_PUBLIC_APP_URL=https://partime.getouch.co`
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` (for first deploy only)
+   - `LOCAL_UPLOAD_ROOT=/app/uploads` or the full `S3_*` set for profile photos
+   - `BAILEYS_API_BASE_URL`, `BAILEYS_TENANT`, `BAILEYS_API_KEY` for WhatsApp OTP
 8. After the first successful deploy, exec into the container once:
    ```bash
    npm run prisma:migrate    # prisma migrate deploy (applies committed migrations)
@@ -99,6 +126,12 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 
 **Money** stored in cents; durations stored in minutes (integers everywhere).
 
+**Staff registration:**
+- `/register` is public and creates staff in `PENDING_REVIEW` state after WhatsApp OTP verification.
+- Staff are looked up by Malaysia phone, email, or alias.
+- Pending-review staff can only clock in when the admin scan setting explicitly allows it.
+- Staff profile images store to S3-compatible storage when configured, otherwise to local disk under `/api/uploads/*`.
+
 ---
 
 ## 5. App map
@@ -106,6 +139,7 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | Route | Purpose |
 |---|---|
 | `/login` | Admin login |
+| `/register` | Public staff self-registration + OTP |
 | `/admin` | Dashboard (active staff, missing clock-outs, weekly totals) |
 | `/admin/staff` | Staff CRUD |
 | `/admin/events` | Work events + QR generation |
@@ -119,6 +153,8 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/api/health` | Liveness + DB probe |
 | `/api/reports/weekly-payroll.csv` | CSV export (admin only) |
 | `/api/reports/daily.csv` | CSV export (admin only) |
+| `/api/public/register/send-otp` | Send WhatsApp OTP for staff self-registration |
+| `/api/public/register/verify` | Verify OTP and create pending-review staff |
 
 ---
 

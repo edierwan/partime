@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/Badge';
+import { Avatar } from '@/components/Avatar';
 import { formatDate, formatTime, mytStartOfDay, mytEndOfDay, parseDateInput } from '@/lib/time';
 import { formatMYR, formatHours } from '@/lib/money';
 import { isMissingClockOut } from '@/lib/calc';
+import { formatMalaysiaPhoneDisplay } from '@/lib/staff';
 import { AdjustClient } from './AdjustClient';
 
 export const dynamic = 'force-dynamic';
@@ -24,8 +26,9 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
     where.staff = { OR: [
       { fullName: { contains: searchParams.q, mode: 'insensitive' } },
       { payName:  { contains: searchParams.q, mode: 'insensitive' } },
-      { alias:    { contains: searchParams.q, mode: 'insensitive' } },
-      { phone:    { contains: searchParams.q } },
+      { aliasPanggilan: { contains: searchParams.q, mode: 'insensitive' } },
+      { phoneE164: { contains: searchParams.q.replace(/\s+/g, '') } },
+      { email: { contains: searchParams.q, mode: 'insensitive' } },
     ]};
   }
 
@@ -108,8 +111,16 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
                 <tr key={s.id}>
                   <td>{formatDate(s.workDate)}</td>
                   <td className="text-ink-600">{s.event.name}</td>
-                  <td className="font-medium">{s.staff.fullName}</td>
-                  <td className="text-ink-600">{s.staff.phone}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <Avatar name={s.staff.fullName} src={s.staff.profileImageUrl} className="h-8 w-8 text-[10px]" />
+                      <div>
+                        <div className="font-medium">{s.staff.fullName}</div>
+                        <div className="text-xs text-ink-500 uppercase tracking-wide">{s.staff.aliasPanggilan}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="text-ink-600">{s.staff.phoneDisplay || formatMalaysiaPhoneDisplay(s.staff.phoneE164)}</td>
                   <td>{formatTime(s.clockInAt)}</td>
                   <td>{s.clockOutAt ? formatTime(s.clockOutAt) : '–'}</td>
                   <td className="text-right">{formatHours(s.grossMinutes)}</td>
