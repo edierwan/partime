@@ -1,9 +1,9 @@
 export type PublicLocale = 'ms' | 'id' | 'en';
 
 export const PUBLIC_LOCALES: Array<{ code: PublicLocale; label: string }> = [
-  { code: 'ms', label: 'Bahasa Melayu' },
-  { code: 'id', label: 'Bahasa Indonesia' },
-  { code: 'en', label: 'English' },
+  { code: 'ms', label: 'BM' },
+  { code: 'id', label: 'ID' },
+  { code: 'en', label: 'EN' },
 ];
 
 export function normalizeLocale(value: string | null | undefined): PublicLocale {

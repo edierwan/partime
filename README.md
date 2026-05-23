@@ -2,7 +2,7 @@
 
 Part-timer marketplace, attendance, employer registration, WhatsApp offer flow, and weekly payroll system.
 
-- Mobile-first public job marketplace with search, public job detail, and interest capture
+- Mobile-first public job marketplace homepage with location, skill, and date search, public job detail, and interest capture
 - Employer workspace for posting jobs, reviewing part-timers, sending WhatsApp offers, tracking replies, and confirming workers
 - Part-timer portal for profile lookup, portfolio uploads, job browsing, offers, and attendance history
 - QR scan clock-in / clock-out from any phone
@@ -166,8 +166,8 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/register` | Public language-aware registration choice |
 | `/register/part-timer` | Public part-timer registration + OTP |
 | `/register/employer` | Public employer registration + OTP |
-| `/jobs` | Public mobile-first job marketplace search |
-| `/jobs/[id]` | Public job detail and interest form |
+| `/jobs` | Public mobile-first job marketplace search with location, skill, date, category, pay type, rate, and open-only filters |
+| `/jobs/[id]` | Public job detail with media, requirements, related jobs, and interest form |
 | `/part-timer` | Phone-based part-timer portal overview |
 | `/part-timer/profile` | Part-timer profile view |
 | `/part-timer/portfolio` | Part-timer portfolio image/video upload |
@@ -183,6 +183,7 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/admin/tenants` | Tenant monitoring |
 | `/admin/part-timers` | Part-timer CRUD and review |
 | `/admin/employers` | Employer registration and tenant review |
+| `/admin/employer-registrations` | Alias to employer registration and tenant review |
 | `/admin/jobs` | Marketplace job monitoring |
 | `/admin/offers` | Offer batch monitoring |
 | `/admin/whatsapp` | WhatsApp outbound/inbound logs and config hint |

@@ -107,7 +107,7 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
         <p className="mt-2 text-sm text-ink-600">{t.partTimerSubtitle}</p>
       </div>
 
-      <form ref={formRef} className="card card-pad space-y-7">
+      <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7">
         <Section title="1. Personal Details">
           <div className="flex items-start gap-4 rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
             <Avatar name={fullName || 'Part-timer'} src={previewUrl} className="h-16 w-16 text-base" />
@@ -204,7 +204,16 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
           </div>
         </Section>
 
-        <Section title="4. Bank Details">
+        <Section title="4. Portfolio (Optional)">
+          <div className="rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
+            <label className="label">Work Photos / Videos</label>
+            <input className="input px-3 py-2" type="file" name="portfolioMedia" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple />
+            <p className="mt-1 text-xs text-ink-500">Upload up to 6 JPG, PNG, WEBP, MP4 or WEBM files for admin review.</p>
+            <FieldError error={fieldErrors.portfolioMedia} />
+          </div>
+        </Section>
+
+        <Section title="5. Bank Details">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label className="label">{t.bank}</label>
@@ -228,7 +237,7 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
           <FieldError error={fieldErrors.consent} />
         </Section>
 
-        <Section title="5. OTP Verification">
+        <Section title="6. OTP Verification">
           {step === 'otp' && (
             <div className="rounded-2xl border border-brand-200 bg-brand-50/70 p-4">
               <label className="label">{t.otpTitle}</label>

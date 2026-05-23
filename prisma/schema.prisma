@@ -369,6 +369,8 @@ model WorkEvent {
   slug             String?          @unique
   summary          String?
   description      String?
+  dressCode        String?
+  toolsNeeded      String?
   category         String?
   jobType          JobType          @default(EVENT)
   jobStatus        JobStatus        @default(DRAFT)
@@ -390,6 +392,9 @@ model WorkEvent {
   applyBy          DateTime?
   payoutStatus     PayoutStatus     @default(UNPAID)
   paymentStatus    JobPaymentStatus @default(NOT_REQUIRED)
+  paidAt           DateTime?
+  paidBy           String?
+  paymentReference String?
   coverImageUrl    String?
   coverImageKey    String?
   autoBreakRule    Boolean          @default(true)

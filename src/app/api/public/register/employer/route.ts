@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { hashOtpCode } from '@/lib/otp';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
 import { uniqueTenantSlug } from '@/lib/tenant';
+import { saveEmployerLogo } from '@/lib/uploads';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -86,6 +87,17 @@ export async function POST(req: Request) {
     select: { id: true },
   });
 
+  let warning: string | null = null;
+  const logo = formData.get('companyLogo');
+  if (logo instanceof File && logo.size > 0) {
+    try {
+      const uploaded = await saveEmployerLogo({ tenantId: tenant.id, file: logo });
+      await prisma.tenant.update({ where: { id: tenant.id }, data: { logoUrl: uploaded.url, logoKey: uploaded.key } });
+    } catch {
+      warning = 'Registration completed, but the company logo could not be stored. Admin can add it later.';
+    }
+  }
+
   await prisma.employerRegistration.create({
     data: {
       tenantId: tenant.id,
@@ -109,5 +121,5 @@ export async function POST(req: Request) {
   });
 
   await prisma.staffOtp.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
-  return NextResponse.json({ ok: true, message: 'Employer registration successful. Your workspace is pending admin review.' });
+  return NextResponse.json({ ok: true, message: 'Employer registration successful. Your workspace is pending admin review.', warning });
 }

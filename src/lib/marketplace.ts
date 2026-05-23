@@ -7,6 +7,7 @@ export const JOB_CATEGORIES = [
   'Promotions',
   'F&B',
   'Warehouse',
+  'Cleaning',
   'Retail',
   'Admin',
   'Technical',
@@ -108,6 +109,8 @@ export function publicJobWhere(searchParams: {
   state?: string;
   category?: string;
   skill?: string;
+  date?: string;
+  payType?: string;
   minRate?: string;
   openOnly?: string;
 }) {
@@ -116,6 +119,8 @@ export function publicJobWhere(searchParams: {
   const state = (searchParams.state || '').trim();
   const category = (searchParams.category || '').trim();
   const skill = (searchParams.skill || '').trim();
+  const date = (searchParams.date || '').trim();
+  const payType = (searchParams.payType || '').trim();
   const minRate = Number(searchParams.minRate || '0');
   const where: any = {
     active: true,
@@ -141,7 +146,27 @@ export function publicJobWhere(searchParams: {
   }
   if (state) where.state = state;
   if (category) where.category = category;
-  if (skill) where.skills = { some: { skill: { slug: skill } } };
+  if (skill) {
+    where.skills = {
+      some: {
+        skill: {
+          OR: [
+            { slug: skill },
+            { nameEn: { contains: skill, mode: 'insensitive' } },
+            { nameMs: { contains: skill, mode: 'insensitive' } },
+            { nameId: { contains: skill, mode: 'insensitive' } },
+          ],
+        },
+      },
+    };
+  }
+  if (date) {
+    const start = new Date(`${date}T00:00:00.000+08:00`);
+    const end = new Date(`${date}T23:59:59.999+08:00`);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) where.workDate = { gte: start, lte: end };
+  }
+  if (payType && ['HOURLY', 'DAILY', 'FIXED'].includes(payType)) where.payType = payType;
+  if (searchParams.openOnly === 'on' || searchParams.openOnly === 'true') where.jobStatus = 'OPEN';
   if (Number.isFinite(minRate) && minRate > 0) where.defaultRateCents = { gte: Math.round(minRate * 100) };
 
   return where;
@@ -181,6 +206,8 @@ export async function createMarketplaceJob(data: {
   name: string;
   summary?: string | null;
   description?: string | null;
+  dressCode?: string | null;
+  toolsNeeded?: string | null;
   category?: string | null;
   location: string;
   state?: string | null;
@@ -209,6 +236,8 @@ export async function createMarketplaceJob(data: {
       slug,
       summary: data.summary || null,
       description: data.description || null,
+      dressCode: data.dressCode || null,
+      toolsNeeded: data.toolsNeeded || null,
       category: data.category || null,
       location: data.location,
       state: data.state || null,

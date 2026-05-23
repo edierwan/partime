@@ -48,7 +48,8 @@ CREATE TABLE "Tenant" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "Tenant_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "Tenant_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "Tenant_slug_key" UNIQUE ("slug")
 );
 
 -- Backfill a default platform tenant for existing single-tenant data.
@@ -162,8 +163,6 @@ ADD COLUMN "status" "PartTimerStatus" NOT NULL DEFAULT 'ACTIVE',
 ADD COLUMN "preferredLocation" TEXT,
 ADD COLUMN "availability" JSONB;
 
-ALTER TABLE "Staff" ALTER COLUMN "gender" SET DEFAULT 'TIDAK_DINYATAKAN';
-
 UPDATE "Staff"
 SET "status" = CASE
   WHEN "active" = false THEN 'INACTIVE'::"PartTimerStatus"
@@ -200,8 +199,6 @@ WHERE l."eventId" = e."id"
 ALTER TABLE "WorkEvent" ALTER COLUMN "tenantId" SET NOT NULL;
 ALTER TABLE "AttendanceSession" ALTER COLUMN "tenantId" SET NOT NULL;
 
--- CreateIndex
-CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 CREATE INDEX "Tenant_status_idx" ON "Tenant"("status");
 CREATE INDEX "Tenant_name_idx" ON "Tenant"("name");
 

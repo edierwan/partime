@@ -13,7 +13,7 @@ Part-timer marketplace, attendance, employer registration, WhatsApp offer flow, 
 - Part-timers scan the QR from their phone and clock in / clock out.
 - Employers can register publicly and become tenant workspaces after platform admin approval.
 - Employers can post public jobs, prepare WhatsApp offer batches, and track replies.
-- Part-timers can browse jobs, register interest, and manage portfolio media.
+- Part-timers can search jobs by location, skill, and date, register interest, and manage portfolio media.
 - System auto-deducts break time, calculates payable hours and total pay.
 - Admin reviews a weekly report and pays staff manually (cash / own bank transfer).
 
@@ -26,5 +26,5 @@ Part-timer marketplace, attendance, employer registration, WhatsApp offer flow, 
 
 See the other files in this folder for product requirements, user flows,
 database plan, UI plan, calculation rules, development phases, testing
-checklist, marketplace offer flow, S3 media storage, and multi-tenant access
-control notes.
+checklist, marketplace offer flow, S3 media storage, multi-tenant access
+control notes, and public homepage search notes.

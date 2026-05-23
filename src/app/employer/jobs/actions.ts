@@ -9,11 +9,14 @@ import { parseRateInputToCents } from '@/lib/money';
 import { parseDateInput } from '@/lib/time';
 import { createMarketplaceJob } from '@/lib/marketplace';
 import { prisma } from '@/lib/db';
+import { saveJobMedia } from '@/lib/uploads';
 
 const jobSchema = z.object({
   name: z.string().min(3),
   summary: z.string().optional(),
   description: z.string().optional(),
+  dressCode: z.string().optional(),
+  toolsNeeded: z.string().optional(),
   category: z.string().optional(),
   location: z.string().min(2),
   state: z.string().optional(),
@@ -38,6 +41,8 @@ export async function createEmployerJob(formData: FormData) {
     name: String(formData.get('name') || ''),
     summary: String(formData.get('summary') || ''),
     description: String(formData.get('description') || ''),
+    dressCode: String(formData.get('dressCode') || ''),
+    toolsNeeded: String(formData.get('toolsNeeded') || ''),
     category: String(formData.get('category') || ''),
     location: String(formData.get('location') || ''),
     state: String(formData.get('state') || ''),
@@ -60,6 +65,8 @@ export async function createEmployerJob(formData: FormData) {
     name: parsed.data.name,
     summary: parsed.data.summary,
     description: parsed.data.description,
+    dressCode: parsed.data.dressCode,
+    toolsNeeded: parsed.data.toolsNeeded,
     category: parsed.data.category,
     location: parsed.data.location,
     state: parsed.data.state,
@@ -75,6 +82,31 @@ export async function createEmployerJob(formData: FormData) {
     jobStatus: parsed.data.jobStatus,
     skillIds: parsed.data.skillIds,
   });
+
+  const coverImage = formData.get('coverImage');
+  if (coverImage instanceof File && coverImage.size > 0) {
+    const saved = await saveJobMedia({ jobId: job.id, file: coverImage, role: 'cover' });
+    await prisma.workEvent.update({ where: { id: job.id }, data: { coverImageUrl: saved.url, coverImageKey: saved.key } });
+  }
+
+  const galleryFiles = formData.getAll('galleryMedia').filter((file): file is File => file instanceof File && file.size > 0).slice(0, 8);
+  if (galleryFiles.length > 0) {
+    const uploads = [];
+    for (const [index, file] of galleryFiles.entries()) {
+      const saved = await saveJobMedia({ jobId: job.id, file, role: 'gallery' });
+      uploads.push({
+        jobId: job.id,
+        mediaType: saved.mediaType,
+        url: saved.url,
+        key: saved.key,
+        filename: saved.filename,
+        mimeType: saved.mimeType,
+        sizeBytes: saved.sizeBytes,
+        sortOrder: index + 1,
+      });
+    }
+    await prisma.jobMedia.createMany({ data: uploads });
+  }
   revalidatePath('/employer/jobs');
   revalidatePath('/jobs');
   redirect(`/employer/jobs/${job.id}`);

@@ -81,9 +81,15 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
         <h1 className="mt-3 text-3xl font-semibold text-ink-950">{t.employerTitle}</h1>
         <p className="mt-2 text-sm text-ink-600">{t.employerSubtitle}</p>
       </div>
-      <form ref={formRef} className="card card-pad space-y-7">
+      <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7">
         <Section title="1. Company Details">
           <Input name="companyName" label={t.companyName} error={fieldErrors.companyName} />
+          <div>
+            <label className="label">Company Logo (Optional)</label>
+            <input className="input px-3 py-2" name="companyLogo" type="file" accept="image/jpeg,image/png,image/webp" />
+            <p className="mt-1 text-xs text-ink-500">JPG, PNG, WEBP up to 2MB.</p>
+            <FieldError error={fieldErrors.companyLogo} />
+          </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input name="businessRegistrationNo" label={`${t.registrationNo} (Optional)`} error={fieldErrors.businessRegistrationNo} />
             <div>

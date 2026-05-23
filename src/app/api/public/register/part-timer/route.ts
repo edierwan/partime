@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { hashOtpCode } from '@/lib/otp';
 import { parseStaffProfileForm } from '@/lib/staff-profile';
-import { saveStaffProfileImage } from '@/lib/uploads';
+import { savePartTimerPortfolioMedia, saveStaffProfileImage } from '@/lib/uploads';
 import { syncPartTimerSkills } from '@/lib/skills';
 
 export const runtime = 'nodejs';
@@ -97,6 +97,30 @@ export async function POST(req: Request) {
       await prisma.staff.update({ where: { id: created.id }, data: { profileImageKey: uploaded.key, profileImageUrl: uploaded.url } });
     } catch {
       warning = 'Registration completed, but the profile photo could not be stored. Admin can add it later.';
+    }
+  }
+
+  const portfolioFiles = formData.getAll('portfolioMedia').filter((file): file is File => file instanceof File && file.size > 0).slice(0, 6);
+  if (portfolioFiles.length > 0) {
+    try {
+      const uploads = [];
+      for (const [index, file] of portfolioFiles.entries()) {
+        const uploaded = await savePartTimerPortfolioMedia({ partTimerId: created.id, file });
+        uploads.push({
+          partTimerId: created.id,
+          mediaType: uploaded.mediaType,
+          title: uploaded.filename,
+          url: uploaded.url,
+          key: uploaded.key,
+          filename: uploaded.filename,
+          mimeType: uploaded.mimeType,
+          sizeBytes: uploaded.sizeBytes,
+          sortOrder: index,
+        });
+      }
+      await prisma.partTimerPortfolioMedia.createMany({ data: uploads });
+    } catch {
+      warning = warning || 'Registration completed, but portfolio media could not be stored. Admin can add it later.';
     }
   }
 
