@@ -3,20 +3,26 @@ import { prisma } from '@/lib/db';
 import { hashOtpCode } from '@/lib/otp';
 import { parseStaffProfileForm } from '@/lib/staff-profile';
 import { saveStaffProfileImage } from '@/lib/uploads';
+import { syncPartTimerSkills } from '@/lib/skills';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const PURPOSE = 'PART_TIMER_REGISTER';
+
 export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);
-  if (!formData) {
-    return NextResponse.json({ ok: false, message: 'Invalid submission.' }, { status: 400 });
-  }
+  if (!formData) return NextResponse.json({ ok: false, message: 'Invalid submission.' }, { status: 400 });
 
-  const parsed = await parseStaffProfileForm(formData, { defaultApprovalStatus: 'PENDING_REVIEW', defaultActive: true });
-  if (!parsed.ok) {
-    return NextResponse.json({ ok: false, message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
-  }
+  const parsed = await parseStaffProfileForm(formData, {
+    defaultApprovalStatus: 'PENDING_REVIEW',
+    defaultStatus: 'PENDING_REVIEW',
+    defaultActive: true,
+    requireIdentity: true,
+    requireSkills: true,
+    requireConsent: true,
+  });
+  if (!parsed.ok) return NextResponse.json({ ok: false, message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
 
   const data = parsed.data;
   const otpCode = String(formData.get('otpCode') || '').trim();
@@ -25,23 +31,16 @@ export async function POST(req: Request) {
   }
 
   const otp = await prisma.staffOtp.findFirst({
-    where: {
-      phoneE164: data.phoneE164,
-      purpose: 'STAFF_REGISTER',
-      consumedAt: null,
-    },
+    where: { phoneE164: data.phoneE164, purpose: PURPOSE as any, consumedAt: null },
     orderBy: { createdAt: 'desc' },
   });
-
   if (!otp || otp.sendStatus !== 'SENT' || otp.expiresAt < new Date()) {
     return NextResponse.json({ ok: false, message: 'OTP expired. Please request a new code.' }, { status: 400 });
   }
   if (otp.attemptCount >= otp.maxAttempts) {
     return NextResponse.json({ ok: false, message: 'Too many incorrect OTP attempts. Please request a new code.' }, { status: 429 });
   }
-
-  const hashed = hashOtpCode({ phoneE164: data.phoneE164, purpose: 'STAFF_REGISTER', code: otpCode });
-  if (hashed !== otp.codeHash) {
+  if (hashOtpCode({ phoneE164: data.phoneE164, purpose: PURPOSE, code: otpCode }) !== otp.codeHash) {
     await prisma.staffOtp.update({ where: { id: otp.id }, data: { attemptCount: { increment: 1 } } });
     return NextResponse.json({ ok: false, message: 'Invalid OTP code.', fieldErrors: { otpCode: 'Invalid OTP code.' } }, { status: 400 });
   }
@@ -69,6 +68,9 @@ export async function POST(req: Request) {
       icNumberNormalized: data.icNumberNormalized,
       icNumberDisplay: data.icNumberDisplay,
       gender: data.gender,
+      nationality: data.nationality,
+      otherNationality: data.otherNationality,
+      passportNumber: data.passportNumber,
       phoneE164: data.phoneE164,
       phoneDisplay: data.phoneDisplay,
       email: data.email,
@@ -77,30 +79,27 @@ export async function POST(req: Request) {
       customBankName: data.customBankName,
       bankAccountNumber: data.bankAccountNumber,
       approvalStatus: 'PENDING_REVIEW',
+      status: 'PENDING_REVIEW',
+      preferredLocation: data.preferredLocation,
+      availability: data.availability,
       active: true,
       notes: data.notes,
     },
     select: { id: true },
   });
 
+  await syncPartTimerSkills({ partTimerId: created.id, skillIds: data.skillIds, otherSkillName: data.otherSkillName });
+
   let warning: string | null = null;
   if (data.profileImage) {
     try {
       const uploaded = await saveStaffProfileImage({ staffId: created.id, file: data.profileImage });
-      await prisma.staff.update({
-        where: { id: created.id },
-        data: { profileImageKey: uploaded.key, profileImageUrl: uploaded.url },
-      });
+      await prisma.staff.update({ where: { id: created.id }, data: { profileImageKey: uploaded.key, profileImageUrl: uploaded.url } });
     } catch {
       warning = 'Registration completed, but the profile photo could not be stored. Admin can add it later.';
     }
   }
 
   await prisma.staffOtp.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
-
-  return NextResponse.json({
-    ok: true,
-    message: 'Registration submitted. Your profile is pending admin review.',
-    warning,
-  });
+  return NextResponse.json({ ok: true, message: 'Registration successful. Your profile is pending admin review.', warning });
 }

@@ -35,21 +35,31 @@ export async function POST(req: Request, { params }: { params: { token: string }
   }
 
   const staff = await prisma.staff.findUnique({ where: { id: staffId } });
-  if (!staff || !staff.active) return NextResponse.json({ ok: false, error: 'Staff not found' });
+  if (!staff || !staff.active) return NextResponse.json({ ok: false, error: 'Part-timer not found' });
 
   const allowPendingClockIn = await getBooleanAppSetting(ALLOW_PENDING_CLOCK_IN_KEY, false);
   if (action === 'CLOCK_IN') {
-    if (staff.approvalStatus === 'REJECTED') {
+    const tenantApproval = await prisma.tenantPartTimerApproval.findUnique({
+      where: { tenantId_partTimerId: { tenantId: event.tenantId, partTimerId: staff.id } },
+      select: { status: true },
+    });
+    if (staff.status === 'REJECTED' || staff.status === 'SUSPENDED') {
       await prisma.scanLog.create({
-        data: { eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Staff rejected' },
+        data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Part-timer rejected or suspended' },
       });
-      return NextResponse.json({ ok: false, error: 'Your registration is currently rejected. Please contact admin.' });
+      return NextResponse.json({ ok: false, error: 'Your profile is not currently allowed to clock in. Please contact admin.' });
     }
-    if (staff.approvalStatus === 'PENDING_REVIEW' && !allowPendingClockIn) {
+    if (staff.status === 'PENDING_REVIEW' && !allowPendingClockIn) {
       await prisma.scanLog.create({
-        data: { eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Pending review staff blocked from clock-in' },
+        data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: 'Pending review part-timer blocked from clock-in' },
       });
       return NextResponse.json({ ok: false, error: 'Your registration is pending review. You can clock in after admin approval.' });
+    }
+    if (tenantApproval?.status === 'BLOCKED' || tenantApproval?.status === 'PENDING') {
+      await prisma.scanLog.create({
+        data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, lat, lng, message: `Tenant approval ${tenantApproval.status}` },
+      });
+      return NextResponse.json({ ok: false, error: 'Your profile is not approved for this employer yet.' });
     }
   }
 
@@ -62,7 +72,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     });
     if (existing) {
       await prisma.scanLog.create({
-        data: { eventId: event.id, staffId: staff.id, action: 'DUPLICATE', ip, userAgent, lat, lng,
+        data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'DUPLICATE', ip, userAgent, lat, lng,
                 message: existing.status === 'OPEN' ? 'Already clocked in' : 'Already completed today' },
       });
       return NextResponse.json({
@@ -74,12 +84,13 @@ export async function POST(req: Request, { params }: { params: { token: string }
     const session = await prisma.attendanceSession.create({
       data: {
         eventId: event.id, staffId: staff.id, workDate,
+        tenantId: event.tenantId,
         clockInAt: now, hourlyRateSnapshotCents: event.defaultRateCents,
         status: 'OPEN',
       },
     });
     await prisma.scanLog.create({
-      data: { eventId: event.id, staffId: staff.id, action: 'CLOCK_IN', ip, userAgent, lat, lng },
+      data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'CLOCK_IN', ip, userAgent, lat, lng },
     });
     return NextResponse.json({
       ok: true, action: 'CLOCK_IN',
@@ -93,7 +104,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   });
   if (!session) {
     await prisma.scanLog.create({
-      data: { eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, message: 'No open session' },
+      data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'BLOCKED', ip, userAgent, message: 'No open session' },
     });
     return NextResponse.json({ ok: false, error: 'No open session to clock out.' });
   }
@@ -119,7 +130,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     },
   });
   await prisma.scanLog.create({
-    data: { eventId: event.id, staffId: staff.id, action: 'CLOCK_OUT', ip, userAgent, lat, lng },
+    data: { tenantId: event.tenantId, eventId: event.id, staffId: staff.id, action: 'CLOCK_OUT', ip, userAgent, lat, lng },
   });
 
   return NextResponse.json({

@@ -7,9 +7,11 @@ import { requireSession } from '@/lib/auth';
 import { generateScanToken } from '@/lib/token';
 import { parseRateInputToCents } from '@/lib/money';
 import { parseDateInput } from '@/lib/time';
+import { currentAdminTenantId } from '@/lib/tenant';
 
 const schema = z.object({
   id: z.string().optional(),
+  tenantId: z.string().optional(),
   name: z.string().min(1),
   location: z.string().min(1),
   workDate: z.string().min(8),
@@ -25,6 +27,7 @@ export async function saveEvent(_: EventFormState, fd: FormData): Promise<EventF
   await requireSession();
   const data = {
     id: (fd.get('id') as string) || undefined,
+    tenantId: (fd.get('tenantId') as string) || undefined,
     name: (fd.get('name') as string) || '',
     location: (fd.get('location') as string) || '',
     workDate: (fd.get('workDate') as string) || '',
@@ -42,20 +45,27 @@ export async function saveEvent(_: EventFormState, fd: FormData): Promise<EventF
   const v = parsed.data;
   const workDate = parseDateInput(v.workDate);
   const defaultRateCents = parseRateInputToCents(v.defaultRate || '0');
+  const tenantId = v.tenantId || await currentAdminTenantId();
+  if (!tenantId) return { ok: false, error: 'No tenant context available' };
 
   if (v.id) {
-    await prisma.workEvent.update({
-      where: { id: v.id },
-      data: {
-        name: v.name, location: v.location, workDate, defaultRateCents,
-        autoBreakRule: v.autoBreakRule ?? true, active: v.active ?? true, notes: v.notes || null,
-      },
-    });
+    await prisma.$transaction([
+      prisma.workEvent.update({
+        where: { id: v.id },
+        data: {
+          tenantId, name: v.name, location: v.location, workDate, defaultRateCents,
+          autoBreakRule: v.autoBreakRule ?? true, active: v.active ?? true, notes: v.notes || null,
+        },
+      }),
+      prisma.attendanceSession.updateMany({ where: { eventId: v.id }, data: { tenantId } }),
+      prisma.scanLog.updateMany({ where: { eventId: v.id }, data: { tenantId } }),
+    ]);
   } else {
     await prisma.workEvent.create({
       data: {
         name: v.name, location: v.location, workDate, defaultRateCents,
         autoBreakRule: v.autoBreakRule ?? true, active: v.active ?? true, notes: v.notes || null,
+        tenantId,
         scanToken: generateScanToken(),
       },
     });

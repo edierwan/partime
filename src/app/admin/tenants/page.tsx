@@ -1,0 +1,6 @@
+import { prisma } from '@/lib/db';
+
+export default async function AdminTenantsPage() {
+  const tenants = await prisma.tenant.findMany({ include: { _count: { select: { events: true, jobOffers: true, employerRegistrations: true, memberships: true } } }, orderBy: { createdAt: 'desc' }, take: 100 });
+  return <div className="space-y-6"><div><h1 className="sectiontitle">Tenants</h1><p className="subtitle">Employer tenant records and marketplace activity.</p></div><div className="card overflow-hidden"><table className="table-base"><thead><tr><th>Tenant</th><th>Contact</th><th>Status</th><th>Jobs</th><th>Offers</th><th>Admins</th></tr></thead><tbody>{tenants.length === 0 && <tr><td colSpan={6} className="py-10 text-center text-ink-500">No tenants yet.</td></tr>}{tenants.map((tenant) => <tr key={tenant.id}><td><div className="font-medium text-ink-950">{tenant.name}</div><div className="text-xs text-ink-500">{tenant.slug}</div></td><td><div>{tenant.email}</div><div className="text-xs text-ink-500">{tenant.phoneE164}</div></td><td>{tenant.status}</td><td>{tenant._count.events}</td><td>{tenant._count.jobOffers}</td><td>{tenant._count.memberships}</td></tr>)}</tbody></table></div></div>;
+}

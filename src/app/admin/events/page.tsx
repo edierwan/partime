@@ -21,8 +21,9 @@ export default async function EventsPage({
   if (status === 'inactive') where.active = false;
 
   const now = new Date();
-  const [events, activeCnt, upcomingCnt, rateAgg] = await Promise.all([
-    prisma.workEvent.findMany({ where, orderBy: { workDate: 'desc' }, take: 100 }),
+  const [events, tenants, activeCnt, upcomingCnt, rateAgg] = await Promise.all([
+    prisma.workEvent.findMany({ where, include: { tenant: { select: { id: true, name: true } } }, orderBy: { workDate: 'desc' }, take: 100 }),
+    prisma.tenant.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     prisma.workEvent.count({ where: { active: true } }),
     prisma.workEvent.count({ where: { active: true, workDate: { gt: mytEndOfDay(now) } } }),
     prisma.workEvent.aggregate({ _avg: { defaultRateCents: true } }),
@@ -38,7 +39,7 @@ export default async function EventsPage({
           <h1 className="sectiontitle">Events &amp; QR</h1>
           <p className="subtitle">Create attendance sessions and generate public QR codes.</p>
         </div>
-        <EventClient mode="addButton" />
+        <EventClient mode="addButton" tenants={tenants} />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -68,25 +69,26 @@ export default async function EventsPage({
           <div className="overflow-x-auto">
             <table className="table-base">
               <thead>
-                <tr><th>Event Name</th><th>Location</th><th>Date</th><th>Hourly Rate</th><th>Status</th><th>Active</th><th>Actions</th></tr>
+                <tr><th>Event Name</th><th>Employer</th><th>Location</th><th>Date</th><th>Hourly Rate</th><th>Status</th><th>Active</th><th>Actions</th></tr>
               </thead>
               <tbody>
                 {events.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-10 text-ink-500">No events yet.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-ink-500">No events yet.</td></tr>
                 )}
                 {events.map((e) => (
                   <tr key={e.id} className={selected?.id === e.id ? 'bg-brand-50/40' : ''}>
                     <td className="font-medium">
                       <Link href={`/admin/events?selected=${e.id}`} className="hover:underline">{e.name}</Link>
                     </td>
+                    <td className="text-ink-600">{e.tenant.name}</td>
                     <td className="text-ink-600">{e.location}</td>
                     <td>{formatDate(e.workDate)}</td>
                     <td>{formatMYR(e.defaultRateCents)}</td>
                     <td><StatusBadge status={e.active ? 'ACTIVE' : 'INACTIVE'} /></td>
                     <td><EventToggle id={e.id} active={e.active} /></td>
                     <td className="text-right">
-                      <EventClient mode="row" event={{
-                        id: e.id, name: e.name, location: e.location, workDate: e.workDate,
+                      <EventClient mode="row" tenants={tenants} event={{
+                        id: e.id, tenantId: e.tenantId, name: e.name, location: e.location, workDate: e.workDate,
                         defaultRateCents: e.defaultRateCents, autoBreakRule: e.autoBreakRule,
                         active: e.active, notes: e.notes,
                       }} />
@@ -106,6 +108,7 @@ export default async function EventsPage({
             </div>
             <div>
               <div className="text-lg font-semibold">{selected.name}</div>
+              <div className="text-sm text-ink-500">Employer: {selected.tenant.name}</div>
               <div className="text-sm text-ink-500">{selected.location}</div>
               <div className="text-sm text-ink-500">{formatDate(selected.workDate)}</div>
               <div className="text-sm text-ink-500 mt-1">Default Rate: {formatMYR(selected.defaultRateCents)}</div>

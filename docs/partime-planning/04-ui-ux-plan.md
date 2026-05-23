@@ -16,10 +16,10 @@ Visual reference: the attached mockup screenshots. Match the look closely.
 ## Layout
 - **Admin shell**: left sidebar (logo + nav), top bar (search, date picker
   display, notifications, admin menu), main content area.
-- Sidebar items: Dashboard, Staff, Events & QR, Attendance Logs, Reports
-  (Daily, Weekly Payroll, Exceptions), Settings. Footer: company picker.
+- Sidebar items: Dashboard, Part-timers, Employers, Events & QR, Attendance Logs, Reports
+  (Daily, Weekly Payroll, Exceptions), Settings. Footer: tenant/multi-tenant marker.
 - Active nav item: light indigo pill, indigo text.
-- Slide-over panels (right side) for create/edit forms (staff, event, adjust
+- Slide-over panels (right side) for create/edit forms (part-timer, event, adjust
   attendance). Click outside or X to close.
 
 ## Components
@@ -37,16 +37,17 @@ Visual reference: the attached mockup screenshots. Match the look closely.
 - Full-width mobile container, padded.
 - Event card with calendar icon + name + location + date + hourly rate.
 - Step 1: phone/email/alias input with **Find Me** button.
-- Step 2: staff found card (avatar + name + staff ID + current status).
+- Step 2: part-timer found card (avatar + name + part-timer ID + current status).
 - Step 3: big primary button (Clock In / Clock Out).
 - Step 4: success card with all calculated values.
 - Pending-review message is shown inline when clock-in is blocked.
 - Footer note: "Break is auto-deducted based on company policy."
 
-## Public registration page
-- Public card-based form, same visual system as login / scan.
-- Profile photo preview with initials fallback.
-- IC field shows derived gender helper text.
+## Public registration pages
+- `/register` is a language-aware chooser for Part-timer and Employer.
+- `/register/part-timer` uses profile, contact/OTP, skills, bank, and consent sections.
+- `/register/employer` uses company, contact/OTP, and hiring-needs sections.
+- IC field shows derived jantina helper text for Malaysian part-timers.
 - WhatsApp OTP step appears inline after form validation succeeds.
 
 ## Tables

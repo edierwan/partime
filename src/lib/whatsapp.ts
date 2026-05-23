@@ -1,9 +1,12 @@
-export interface WhatsAppOtpResult {
+export interface WhatsAppSendResult {
   ok: boolean;
   error?: string;
   detail?: string;
   messageId?: string | null;
+  payload?: unknown;
 }
+
+export type WhatsAppOtpResult = WhatsAppSendResult;
 
 function normalizedBaseUrl(): string {
   return (process.env.BAILEYS_API_BASE_URL || '').trim().replace(/\/+$/, '');
@@ -21,21 +24,22 @@ export function isWhatsAppOtpConfigured(): boolean {
   return Boolean(normalizedBaseUrl() && process.env.BAILEYS_API_KEY);
 }
 
-export async function sendWhatsAppOtp({
+export const isWhatsAppConfigured = isWhatsAppOtpConfigured;
+
+export async function sendWhatsAppMessage({
   toPhoneE164,
-  code,
+  text,
   tenant = process.env.BAILEYS_TENANT || 'partime',
 }: {
   toPhoneE164: string;
-  code: string;
+  text: string;
   tenant?: string;
-}): Promise<WhatsAppOtpResult> {
-  if (!isWhatsAppOtpConfigured()) {
-    return { ok: false, error: 'otp_service_not_configured', detail: 'WhatsApp OTP is not configured.' };
+}): Promise<WhatsAppSendResult> {
+  if (!isWhatsAppConfigured()) {
+    return { ok: false, error: 'whatsapp_service_not_configured', detail: 'WhatsApp service is not configured.' };
   }
 
   const url = `${normalizedBaseUrl()}${sendPathTemplate().replace('{tenant}', encodeURIComponent(tenant))}`;
-  const text = `Your Partime verification code is ${code}. This code expires in 5 minutes.`;
 
   try {
     const res = await fetch(url, {
@@ -68,19 +72,37 @@ export async function sendWhatsAppOtp({
       return {
         ok: false,
         error: payload?.error?.code || payload?.error || `upstream_${res.status}`,
-        detail: payload?.error?.message || payload?.message || payload?.detail || 'OTP service is temporarily unavailable. Please try again later.',
+        detail: payload?.error?.message || payload?.message || payload?.detail || 'WhatsApp service is temporarily unavailable. Please try again later.',
+        payload,
       };
     }
 
     return {
       ok: true,
-      messageId: payload?.messageId || payload?.message_id || null,
+      messageId: payload?.messageId || payload?.message_id || payload?.id || null,
+      payload,
     };
   } catch (error) {
     return {
       ok: false,
-      error: 'otp_service_unreachable',
-      detail: error instanceof Error ? error.message : 'OTP service is temporarily unavailable. Please try again later.',
+      error: 'whatsapp_service_unreachable',
+      detail: error instanceof Error ? error.message : 'WhatsApp service is temporarily unavailable. Please try again later.',
     };
   }
+}
+
+export async function sendWhatsAppOtp({
+  toPhoneE164,
+  code,
+  tenant = process.env.BAILEYS_TENANT || 'partime',
+}: {
+  toPhoneE164: string;
+  code: string;
+  tenant?: string;
+}): Promise<WhatsAppOtpResult> {
+  const text = `Your Partime verification code is ${code}. This code expires in 5 minutes.`;
+  const result = await sendWhatsAppMessage({ toPhoneE164, text, tenant });
+  if (result.error === 'whatsapp_service_not_configured') return { ...result, error: 'otp_service_not_configured', detail: 'WhatsApp OTP is not configured.' };
+  if (result.error === 'whatsapp_service_unreachable') return { ...result, error: 'otp_service_unreachable' };
+  return result;
 }

@@ -1,20 +1,24 @@
 import { z } from 'zod';
 import {
+  AVAILABILITY_OPTIONS,
   formatIcNumber,
   formatMalaysiaPhoneDisplay,
   genderFromIc,
   isValidMalaysiaIc,
+  NATIONALITY_OPTIONS,
   normalizeAliasPanggilan,
   normalizeBankAccount,
   normalizeIcNumber,
   normalizeMalaysiaPhone,
+  normalizePassportNumber,
   resolveBankName,
   validateBankAccount,
 } from '@/lib/staff';
 import { validateProfileImage } from '@/lib/uploads';
 
 export type StaffApprovalStatusValue = 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
-export type StaffGenderFormValue = 'AUTO' | 'LELAKI' | 'PEREMPUAN' | 'UNKNOWN';
+export type PartTimerStatusValue = 'PENDING_OTP' | 'PENDING_REVIEW' | 'ACTIVE' | 'INACTIVE' | 'REJECTED' | 'SUSPENDED';
+export type StaffGenderFormValue = 'AUTO' | 'LELAKI' | 'PEREMPUAN' | 'TIDAK_DINYATAKAN' | 'UNKNOWN';
 
 const rawSchema = z.object({
   id: z.string().optional(),
@@ -24,11 +28,16 @@ const rawSchema = z.object({
   phone: z.string().trim().min(1, 'Phone number required'),
   email: z.string().trim().optional().default(''),
   icNumber: z.string().trim().optional().default(''),
-  gender: z.enum(['AUTO', 'LELAKI', 'PEREMPUAN', 'UNKNOWN']).optional().default('AUTO'),
+  gender: z.enum(['AUTO', 'LELAKI', 'PEREMPUAN', 'TIDAK_DINYATAKAN', 'UNKNOWN']).optional().default('AUTO'),
+  nationality: z.string().trim().optional().default('Malaysia'),
+  otherNationality: z.string().trim().optional().default(''),
+  passportNumber: z.string().trim().optional().default(''),
+  preferredLocation: z.string().trim().optional().default(''),
   bankCode: z.string().trim().optional().default(''),
   customBankName: z.string().trim().optional().default(''),
   bankAccountNumber: z.string().trim().optional().default(''),
   approvalStatus: z.enum(['APPROVED', 'PENDING_REVIEW', 'REJECTED']).optional(),
+  status: z.enum(['PENDING_OTP', 'PENDING_REVIEW', 'ACTIVE', 'INACTIVE', 'REJECTED', 'SUSPENDED']).optional(),
   active: z.coerce.boolean().optional(),
   notes: z.string().trim().optional().default(''),
   removeProfileImage: z.coerce.boolean().optional().default(false),
@@ -41,7 +50,10 @@ export interface StaffProfileFormData {
   fullName: string;
   icNumberNormalized: string | null;
   icNumberDisplay: string | null;
-  gender: 'LELAKI' | 'PEREMPUAN' | 'UNKNOWN';
+  gender: 'LELAKI' | 'PEREMPUAN' | 'TIDAK_DINYATAKAN';
+  nationality: string;
+  otherNationality: string | null;
+  passportNumber: string | null;
   phoneE164: string;
   phoneDisplay: string;
   email: string | null;
@@ -50,6 +62,11 @@ export interface StaffProfileFormData {
   customBankName: string | null;
   bankAccountNumber: string | null;
   approvalStatus: StaffApprovalStatusValue;
+  status: PartTimerStatusValue;
+  preferredLocation: string | null;
+  availability: string[];
+  skillIds: string[];
+  otherSkillName: string | null;
   active: boolean;
   notes: string | null;
   removeProfileImage: boolean;
@@ -64,10 +81,18 @@ export async function parseStaffProfileForm(
   fd: FormData,
   {
     defaultApprovalStatus = 'APPROVED',
+    defaultStatus = 'ACTIVE',
     defaultActive = true,
+    requireIdentity = false,
+    requireSkills = false,
+    requireConsent = false,
   }: {
     defaultApprovalStatus?: StaffApprovalStatusValue;
+    defaultStatus?: PartTimerStatusValue;
     defaultActive?: boolean;
+    requireIdentity?: boolean;
+    requireSkills?: boolean;
+    requireConsent?: boolean;
   } = {},
 ): Promise<StaffProfileParseResult> {
   const raw = {
@@ -79,10 +104,15 @@ export async function parseStaffProfileForm(
     email: stringValue(fd, 'email'),
     icNumber: stringValue(fd, 'icNumber'),
     gender: (stringValue(fd, 'gender') || 'AUTO') as StaffGenderFormValue,
+    nationality: stringValue(fd, 'nationality') || 'Malaysia',
+    otherNationality: stringValue(fd, 'otherNationality'),
+    passportNumber: stringValue(fd, 'passportNumber'),
+    preferredLocation: stringValue(fd, 'preferredLocation'),
     bankCode: stringValue(fd, 'bankCode'),
     customBankName: stringValue(fd, 'customBankName'),
     bankAccountNumber: stringValue(fd, 'bankAccountNumber') || stringValue(fd, 'bankAccount'),
     approvalStatus: (stringValue(fd, 'approvalStatus') || undefined) as StaffApprovalStatusValue | undefined,
+    status: (stringValue(fd, 'status') || undefined) as PartTimerStatusValue | undefined,
     active: fd.get('active') === 'on' || fd.get('active') === 'true',
     notes: stringValue(fd, 'notes'),
     removeProfileImage: fd.get('removeProfileImage') === 'on' || fd.get('removeProfileImage') === 'true',
@@ -111,6 +141,9 @@ export async function parseStaffProfileForm(
 
   const value = parsed.data;
   const fieldErrors: Record<string, string> = {};
+  const skillIds = stringValues(fd, 'skillIds').filter(Boolean);
+  const otherSkillName = stringValue(fd, 'otherSkillName') || null;
+  const availability = stringValues(fd, 'availability').filter((item) => (AVAILABILITY_OPTIONS as readonly string[]).includes(item));
 
   const aliasPanggilan = normalizeAliasPanggilan(value.aliasPanggilan);
   if (!/^[A-Z0-9._-]{2,32}$/.test(aliasPanggilan)) {
@@ -128,8 +161,24 @@ export async function parseStaffProfileForm(
   }
 
   const icNumberNormalized = normalizeIcNumber(value.icNumber);
-  if (value.icNumber && !isValidMalaysiaIc(icNumberNormalized)) {
+  const nationality = resolveNationality(value.nationality, value.otherNationality);
+  const passportNumber = normalizePassportNumber(value.passportNumber);
+  if (nationality === 'Malaysia' && requireIdentity && !icNumberNormalized) {
+    fieldErrors.icNumber = 'IC number is required for Malaysian part-timers';
+  } else if (value.icNumber && !isValidMalaysiaIc(icNumberNormalized)) {
     fieldErrors.icNumber = 'Enter a valid Malaysia IC number';
+  }
+  if (nationality !== 'Malaysia' && requireIdentity && !passportNumber) {
+    fieldErrors.passportNumber = 'Passport number is required for non-Malaysian part-timers';
+  }
+  if (value.nationality === 'Other' && !value.otherNationality.trim()) {
+    fieldErrors.otherNationality = 'Enter nationality';
+  }
+  if (requireSkills && skillIds.length === 0 && !otherSkillName) {
+    fieldErrors.skillIds = 'Select at least one skill or enter another skill';
+  }
+  if (requireConsent && fd.get('consent') !== 'on' && fd.get('consent') !== 'true') {
+    fieldErrors.consent = 'Consent is required';
   }
 
   const bankCode = value.bankCode || '';
@@ -150,8 +199,8 @@ export async function parseStaffProfileForm(
     return { ok: false, error: 'Invalid input', fieldErrors };
   }
 
-  const derivedGender = icNumberNormalized ? genderFromIc(icNumberNormalized) : 'UNKNOWN';
-  const gender = value.gender === 'AUTO' ? derivedGender : value.gender;
+  const derivedGender = icNumberNormalized ? genderFromIc(icNumberNormalized) : 'TIDAK_DINYATAKAN';
+  const gender = value.gender === 'AUTO' || value.gender === 'UNKNOWN' ? derivedGender : value.gender;
 
   return {
     ok: true,
@@ -163,6 +212,9 @@ export async function parseStaffProfileForm(
       icNumberNormalized: icNumberNormalized || null,
       icNumberDisplay: icNumberNormalized ? formatIcNumber(icNumberNormalized) : null,
       gender,
+      nationality,
+      otherNationality: value.nationality === 'Other' ? value.otherNationality.trim() || null : null,
+      passportNumber: passportNumber || null,
       phoneE164,
       phoneDisplay: formatMalaysiaPhoneDisplay(phoneE164),
       email: email || null,
@@ -171,6 +223,11 @@ export async function parseStaffProfileForm(
       customBankName: customBankName || null,
       bankAccountNumber: bankAccountNumber || null,
       approvalStatus: value.approvalStatus || defaultApprovalStatus,
+      status: value.status || defaultStatus,
+      preferredLocation: value.preferredLocation || null,
+      availability,
+      skillIds,
+      otherSkillName,
       active: value.active ?? defaultActive,
       notes: value.notes || null,
       removeProfileImage: value.removeProfileImage,
@@ -182,4 +239,14 @@ export async function parseStaffProfileForm(
 function stringValue(fd: FormData, key: string): string {
   const value = fd.get(key);
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function stringValues(fd: FormData, key: string): string[] {
+  return fd.getAll(key).filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean);
+}
+
+function resolveNationality(nationality: string, otherNationality: string): string {
+  const allowed = new Set(NATIONALITY_OPTIONS.map((item) => item.code));
+  if (nationality === 'Other') return otherNationality.trim() || 'Other';
+  return allowed.has(nationality) ? nationality : 'Malaysia';
 }

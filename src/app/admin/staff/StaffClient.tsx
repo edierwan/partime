@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { SlideOver } from '@/components/SlideOver';
 import { Avatar } from '@/components/Avatar';
 import { activateStaff, deactivateStaff, saveStaff, setStaffApprovalStatus } from './actions';
-import { MALAYSIA_BANK_OPTIONS, formatIcNumber, genderFromIc, normalizeIcNumber } from '@/lib/staff';
+import { MALAYSIA_BANK_OPTIONS, NATIONALITY_OPTIONS, displayGender, formatIcNumber, genderFromIc, normalizeIcNumber } from '@/lib/staff';
 
 interface StaffData {
   id?: string;
@@ -13,7 +13,10 @@ interface StaffData {
   aliasPanggilan: string;
   fullName: string;
   icNumberDisplay: string | null;
-  gender: 'LELAKI' | 'PEREMPUAN' | 'UNKNOWN';
+  gender: 'LELAKI' | 'PEREMPUAN' | 'UNKNOWN' | 'TIDAK_DINYATAKAN';
+  nationality: string;
+  otherNationality: string | null;
+  passportNumber: string | null;
   phoneDisplay: string;
   email: string | null;
   bankCode: string | null;
@@ -22,6 +25,8 @@ interface StaffData {
   bankAccountNumber: string | null;
   profileImageUrl: string | null;
   approvalStatus: 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
+  status: 'PENDING_OTP' | 'PENDING_REVIEW' | 'ACTIVE' | 'INACTIVE' | 'REJECTED' | 'SUSPENDED';
+  preferredLocation: string | null;
   active: boolean;
   notes: string | null;
 }
@@ -38,7 +43,7 @@ export function StaffClient({ mode, staff }: { mode: 'addButton' | 'row'; staff?
   return (
     <>
       {mode === 'addButton' && (
-        <button className="btn-primary" onClick={() => setOpen(true)}>+ Add Staff</button>
+        <button className="btn-primary" onClick={() => setOpen(true)}>+ Add Part-timer</button>
       )}
       {mode === 'row' && (
         <button className="text-brand-600 text-sm hover:underline" onClick={() => setOpen(true)}>Edit</button>
@@ -85,7 +90,7 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
 
   async function onDeactivate() {
     if (!initial?.id) return;
-    if (!confirm('Deactivate this staff?')) return;
+    if (!confirm('Deactivate this part-timer?')) return;
     start(async () => { await deactivateStaff(initial.id!); onClose(); });
   }
   async function onActivate() {
@@ -102,7 +107,7 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
   }
   async function onReject() {
     if (!initial?.id) return;
-    if (!confirm('Reject this staff profile?')) return;
+    if (!confirm('Reject this part-timer profile?')) return;
     start(async () => { await setStaffApprovalStatus(initial.id!, 'REJECTED'); onClose(); });
   }
 
@@ -110,8 +115,8 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
     <SlideOver
       open
       onClose={onClose}
-      title={isEdit ? 'Edit Staff' : 'Add Staff'}
-      subtitle={isEdit ? 'Update details for this staff.' : 'Add a new staff to the system.'}
+      title={isEdit ? 'Edit Part-timer' : 'Add Part-timer'}
+      subtitle={isEdit ? 'Update details for this part-timer.' : 'Add a new part-timer to the system.'}
       footer={
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 text-sm">
@@ -136,7 +141,7 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
           </div>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
-            <button type="submit" form="staff-form" disabled={pending} className="btn-primary">{pending ? 'Saving…' : 'Save Staff'}</button>
+            <button type="submit" form="staff-form" disabled={pending} className="btn-primary">{pending ? 'Saving…' : 'Save Part-timer'}</button>
           </div>
         </div>
       }
@@ -144,7 +149,7 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
       <form id="staff-form" onSubmit={onSubmit} className="space-y-4">
         {initial?.id && <input type="hidden" name="id" value={initial.id} />}
         <div className="flex items-start gap-4 rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
-          <Avatar name={initial?.fullName || 'New Staff'} src={previewUrl} className="h-16 w-16 text-base" />
+          <Avatar name={initial?.fullName || 'New Part-timer'} src={previewUrl} className="h-16 w-16 text-base" />
           <div className="flex-1 space-y-2">
             <div>
               <label className="label">Profile Photo</label>
@@ -195,19 +200,29 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
               onChange={(event) => setIcInput(event.target.value)}
               onBlur={() => setIcInput((value) => formatIcNumber(normalizeIcNumber(value) || value))}
             />
-            <p className="text-xs text-ink-500 mt-1">Gender auto-derives from the final IC digit unless manually overridden.</p>
+            <p className="text-xs text-ink-500 mt-1">Jantina auto-derives from the final IC digit unless manually overridden.</p>
             {fieldErrs.icNumber && <p className="text-xs text-rose-600 mt-1">{fieldErrs.icNumber}</p>}
           </div>
           <div>
             <label className="label">Gender</label>
             <select className="input" name="gender" defaultValue="AUTO">
-              <option value="AUTO">Auto from IC ({derivedGender === 'UNKNOWN' ? initial?.gender || 'UNKNOWN' : derivedGender})</option>
+              <option value="AUTO">Auto from IC ({displayGender(derivedGender === 'TIDAK_DINYATAKAN' ? initial?.gender || 'TIDAK_DINYATAKAN' : derivedGender)})</option>
               <option value="LELAKI">Lelaki</option>
               <option value="PEREMPUAN">Perempuan</option>
-              <option value="UNKNOWN">Tidak Dinyatakan</option>
+              <option value="TIDAK_DINYATAKAN">Tidak Dinyatakan</option>
             </select>
           </div>
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="label">Nationality</label>
+            <select className="input" name="nationality" defaultValue={initial?.nationality || 'Malaysia'}>
+              {NATIONALITY_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+            </select>
+          </div>
+          <Field name="passportNumber" label="Passport No. (If applicable)" defaultValue={initial?.passportNumber || ''} error={fieldErrs.passportNumber} />
+        </div>
+        <Field name="preferredLocation" label="Preferred Work Location" placeholder="e.g. Kuala Lumpur" defaultValue={initial?.preferredLocation || ''} error={fieldErrs.preferredLocation} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="label">Bank</label>
@@ -248,17 +263,27 @@ function StaffForm({ initial, onClose }: { initial?: StaffData; onClose: () => v
           </div>
           <div className="rounded-2xl border border-ink-200 bg-ink-50/70 px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-ink-500">Derived Gender</div>
-            <div className="mt-1 text-sm font-medium text-ink-900">{derivedGender === 'UNKNOWN' ? 'Not enough IC data' : derivedGender}</div>
+            <div className="mt-1 text-sm font-medium text-ink-900">{displayGender(derivedGender)}</div>
           </div>
         </div>
         <div>
+          <label className="label">Part-timer Status</label>
+          <select className="input" name="status" defaultValue={initial?.status || 'ACTIVE'}>
+            <option value="ACTIVE">Active</option>
+            <option value="PENDING_REVIEW">Pending Review</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="SUSPENDED">Suspended</option>
+          </select>
+        </div>
+        <div>
           <label className="label">Notes (Optional)</label>
-          <textarea className="input min-h-[80px]" name="notes" placeholder="Add any notes about this staff…" defaultValue={initial?.notes || ''} />
+          <textarea className="input min-h-[80px]" name="notes" placeholder="Add any notes about this part-timer…" defaultValue={initial?.notes || ''} />
         </div>
         <div className="flex items-center justify-between border-t border-ink-200 pt-4">
           <div>
             <div className="text-sm font-medium">Active</div>
-            <div className="text-xs text-ink-500">Staff is active and can be assigned to events.</div>
+            <div className="text-xs text-ink-500">Part-timer is active and can be assigned to events.</div>
           </div>
           <label className="inline-flex items-center cursor-pointer">
             <input type="checkbox" name="active" defaultChecked={initial?.active ?? true} className="sr-only peer" />

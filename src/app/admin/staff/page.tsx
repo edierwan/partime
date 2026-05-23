@@ -4,16 +4,19 @@ import { StatCard } from '@/components/StatCard';
 import { Badge, StatusBadge } from '@/components/Badge';
 import { Avatar } from '@/components/Avatar';
 import { StaffClient } from './StaffClient';
-import { formatMalaysiaPhoneDisplay, maskBankAccountNumber, maskIcNumber, resolveBankName } from '@/lib/staff';
+import { displayGender, formatMalaysiaPhoneDisplay, maskBankAccountNumber, resolveBankName } from '@/lib/staff';
+import { listSkillCatalog } from '@/lib/skills';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function StaffPage({
   searchParams,
-}: { searchParams: { q?: string; filter?: string } }) {
+}: { searchParams: { q?: string; filter?: string; skillId?: string; nationality?: string } }) {
   const q = (searchParams.q || '').trim();
   const filter = searchParams.filter || 'all';
+  const skillId = searchParams.skillId || 'all';
+  const nationality = searchParams.nationality || 'all';
 
   const where: any = {};
   if (q) {
@@ -25,9 +28,12 @@ export default async function StaffPage({
       { email: { contains: q, mode: 'insensitive' } },
     ];
   }
-  if (filter === 'active') where.active = true;
-  if (filter === 'inactive') where.active = false;
-  if (filter === 'pending-review') where.approvalStatus = 'PENDING_REVIEW';
+  if (filter === 'active') where.status = 'ACTIVE';
+  if (filter === 'inactive') where.status = 'INACTIVE';
+  if (filter === 'pending-review') where.status = 'PENDING_REVIEW';
+  if (filter === 'rejected') where.status = 'REJECTED';
+  if (skillId !== 'all') where.skills = { some: { skillId } };
+  if (nationality !== 'all') where.nationality = nationality;
   if (filter === 'missing-bank') {
     where.AND = [{
       OR: [
@@ -39,22 +45,31 @@ export default async function StaffPage({
     }];
   }
 
-  const [staff, total, active, pendingReview, missingBank] = await Promise.all([
-    prisma.staff.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 }),
+  const [staff, total, active, pendingReview, missingBank, skillCatalog, nationalities] = await Promise.all([
+    prisma.staff.findMany({
+      where,
+      include: { skills: { include: { skill: true }, take: 6 } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    }),
     prisma.staff.count(),
-    prisma.staff.count({ where: { active: true } }),
-    prisma.staff.count({ where: { approvalStatus: 'PENDING_REVIEW' } }),
+    prisma.staff.count({ where: { status: 'ACTIVE' } }),
+    prisma.staff.count({ where: { status: 'PENDING_REVIEW' } }),
     prisma.staff.count({ where: { OR: [{ bankCode: null }, { bankCode: '' }, { bankAccountNumber: null }, { bankAccountNumber: '' }] } }),
+    listSkillCatalog(),
+    prisma.staff.findMany({ distinct: ['nationality'], select: { nationality: true }, orderBy: { nationality: 'asc' } }),
   ]);
 
   const filterChip = (key: string, label: string, count?: number) => {
     const active = filter === key || (key === 'all' && !searchParams.filter);
     const params = new URLSearchParams();
     if (q) params.set('q', q);
+    if (skillId !== 'all') params.set('skillId', skillId);
+    if (nationality !== 'all') params.set('nationality', nationality);
     if (key !== 'all') params.set('filter', key);
     return (
       <Link
-        href={`/admin/staff${params.toString() ? `?${params.toString()}` : ''}`}
+        href={`/admin/part-timers${params.toString() ? `?${params.toString()}` : ''}`}
         className={`px-3 py-1.5 rounded-md text-xs font-medium border ${active ? 'bg-brand-50 text-brand-700 border-brand-200' : 'bg-white border-ink-200 text-ink-700 hover:bg-ink-50'}`}
       >
         {label} {count != null && <span className="ml-1 text-ink-500">{count}</span>}
@@ -66,30 +81,41 @@ export default async function StaffPage({
     <div className="space-y-6">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="sectiontitle">Staff Management</h1>
-          <p className="subtitle">Manage part-time worker profiles and payment details.</p>
+          <h1 className="sectiontitle">Part-timer Management</h1>
+          <p className="subtitle">Manage part-timer profiles, skills, approval status, and payment details.</p>
         </div>
         <StaffClient mode="addButton" />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Staff"        value={total}                                  icon="👥" accent="blue" />
-        <StatCard label="Active Staff"       value={active}                                 icon="✓"  accent="green" />
+        <StatCard label="Total Part-timers"  value={total}                                  icon="👥" accent="blue" />
+        <StatCard label="Active Part-timers" value={active}                                 icon="✓"  accent="green" />
         <StatCard label="Pending Review"     value={pendingReview}                          icon="🕒" accent="amber" hint={pendingReview ? 'Needs approval' : '—'} />
         <StatCard label="Missing Bank Info"  value={missingBank}                            icon="⚠️" accent="amber" hint={missingBank ? 'Needs attention' : '—'} />
       </div>
 
       <div className="card">
         <div className="p-4 flex flex-wrap items-center gap-3 border-b border-ink-200">
-          <form className="flex-1 min-w-[220px]" action="/admin/staff" method="get">
+          <form className="flex-1 min-w-[220px] grid grid-cols-1 md:grid-cols-3 gap-3" action="/admin/part-timers" method="get">
             {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
             <input className="input" name="q" defaultValue={q} placeholder="Search by name, alias, phone, or email…" />
+            <select className="input" name="skillId" defaultValue={skillId}>
+              <option value="all">All skills</option>
+              {skillCatalog.flatMap((category) => category.skills).map((skill) => (
+                <option key={skill.id} value={skill.id}>{skill.nameEn}</option>
+              ))}
+            </select>
+            <select className="input" name="nationality" defaultValue={nationality}>
+              <option value="all">All nationalities</option>
+              {nationalities.map((item) => <option key={item.nationality} value={item.nationality}>{item.nationality}</option>)}
+            </select>
           </form>
           <div className="flex flex-wrap gap-2">
             {filterChip('all', 'All', total)}
             {filterChip('active', 'Active', active)}
             {filterChip('inactive', 'Inactive', total - active)}
             {filterChip('pending-review', 'Pending Review', pendingReview)}
+            {filterChip('rejected', 'Rejected')}
             {filterChip('missing-bank', 'Missing Bank Info', missingBank)}
           </div>
         </div>
@@ -98,14 +124,14 @@ export default async function StaffPage({
           <table className="table-base">
             <thead>
               <tr>
-                <th>Staff</th><th>Alias / Match Key</th><th>IC</th>
-                <th>Phone</th><th>Email</th><th>Bank</th>
+                <th>Part-timer</th><th>Alias / Panggilan</th><th>Phone</th><th>Email</th>
+                <th>Jantina</th><th>Warganegara</th><th>Skills</th><th>Bank</th>
                 <th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {staff.length === 0 && (
-                <tr><td colSpan={8} className="text-center py-10 text-ink-500">No staff found.</td></tr>
+                <tr><td colSpan={10} className="text-center py-10 text-ink-500">No part-timers found.</td></tr>
               )}
               {staff.map((s) => (
                 <tr key={s.id}>
@@ -119,9 +145,15 @@ export default async function StaffPage({
                     </div>
                   </td>
                   <td className="text-ink-600 uppercase text-xs tracking-wide">{s.aliasPanggilan}</td>
-                  <td className="text-ink-600">{maskIcNumber(s.icNumberNormalized || s.icNumberDisplay)}</td>
                   <td className="text-ink-600">{s.phoneDisplay || formatMalaysiaPhoneDisplay(s.phoneE164)}</td>
                   <td className="text-ink-600">{s.email || '—'}</td>
+                  <td className="text-ink-600">{displayGender(s.gender)}</td>
+                  <td className="text-ink-600">{s.nationality}</td>
+                  <td>
+                    <div className="flex flex-wrap gap-1">
+                      {s.skills.length === 0 ? '—' : s.skills.map((item) => <Badge key={item.skillId} variant="blue">{item.skill.nameEn}</Badge>)}
+                    </div>
+                  </td>
                   <td>
                     <div className="space-y-1">
                       <div>{resolveBankName(s.bankCode, s.bankName, s.customBankName) || '—'}</div>
@@ -131,10 +163,8 @@ export default async function StaffPage({
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-2">
-                      <StatusBadge status={s.active ? 'ACTIVE' : 'INACTIVE'} />
+                      <StatusBadge status={s.status} />
                       {s.approvalStatus === 'PENDING_REVIEW' && <Badge variant="amber">Pending Review</Badge>}
-                      {s.approvalStatus === 'REJECTED' && <Badge variant="red">Rejected</Badge>}
-                      {s.approvalStatus === 'APPROVED' && <Badge variant="green">Approved</Badge>}
                     </div>
                   </td>
                   <td className="text-right">
@@ -145,6 +175,9 @@ export default async function StaffPage({
                       fullName: s.fullName,
                       icNumberDisplay: s.icNumberDisplay,
                       gender: s.gender,
+                      nationality: s.nationality,
+                      otherNationality: s.otherNationality,
+                      passportNumber: s.passportNumber,
                       phoneDisplay: s.phoneDisplay || s.phoneE164,
                       email: s.email,
                       bankCode: s.bankCode,
@@ -153,6 +186,8 @@ export default async function StaffPage({
                       bankAccountNumber: s.bankAccountNumber,
                       profileImageUrl: s.profileImageUrl,
                       approvalStatus: s.approvalStatus,
+                      status: s.status,
+                      preferredLocation: s.preferredLocation,
                       active: s.active,
                       notes: s.notes,
                     }} />

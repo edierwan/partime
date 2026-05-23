@@ -53,14 +53,14 @@ export default async function DashboardPage() {
         <StatCard label="Missing Clock-outs"          value={missing}                            icon="⚠️" accent="red"   hint={missing ? 'Needs attention' : 'All good'} />
         <StatCard label="Total Payable Hours (Week)"  value={formatHours(totalPayable)}          icon="⏱"  accent="blue" />
         <StatCard label="Estimated Weekly Payout"     value={formatMYR(totalPay)}                icon="💼" accent="violet" />
-        <StatCard label="Staff Worked (Week)"         value={weekStaff.length}                   icon="🧑‍🤝‍🧑" accent="sky" />
+        <StatCard label="Part-timers Worked (Week)"   value={weekStaff.length}                   icon="🧑‍🤝‍🧑" accent="sky" />
         <StatCard label="Active Events Today"         value={activeEvents}                       icon="📅" accent="amber" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <div className="px-5 py-4 flex items-center justify-between border-b border-ink-200">
-            <div className="font-semibold">Today’s Active Staff</div>
+            <div className="font-semibold">Today’s Active Part-timers</div>
             <Link href="/admin/attendance" className="text-xs text-brand-600 hover:underline">View all</Link>
           </div>
           {todaysStaff.length === 0 ? (
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
           ) : (
             <table className="table-base">
               <thead>
-                <tr><th>Staff Name</th><th>Event</th><th>Clock In</th><th>Status</th></tr>
+                <tr><th>Part-timer Name</th><th>Event</th><th>Clock In</th><th>Status</th></tr>
               </thead>
               <tbody>
                 {todaysStaff.map((s) => {
@@ -91,9 +91,9 @@ export default async function DashboardPage() {
         <div className="card card-pad">
           <div className="font-semibold mb-3">Quick Actions</div>
           <div className="grid grid-cols-2 gap-3">
-            <Link href="/admin/staff" className="card card-pad hover:bg-ink-50 transition-colors text-center">
+            <Link href="/admin/part-timers" className="card card-pad hover:bg-ink-50 transition-colors text-center">
               <div className="text-2xl mb-1">👤</div>
-              <div className="text-sm font-medium">Add Staff</div>
+              <div className="text-sm font-medium">Add Part-timer</div>
             </Link>
             <Link href="/admin/events" className="card card-pad hover:bg-ink-50 transition-colors text-center">
               <div className="text-2xl mb-1">🎫</div>

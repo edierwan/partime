@@ -6,7 +6,14 @@ import { cn } from '@/lib/utils';
 
 const items = [
   { href: '/admin',                          label: 'Dashboard',       icon: '🏠' },
-  { href: '/admin/staff',                    label: 'Staff',           icon: '👥' },
+  { href: '/admin/platform',                 label: 'Platform',        icon: '🧭' },
+  { href: '/admin/tenants',                  label: 'Tenants',         icon: '🏬' },
+  { href: '/admin/part-timers',              label: 'Part-timers',     icon: '👥' },
+  { href: '/admin/employers',                label: 'Employers',       icon: '🏢' },
+  { href: '/admin/jobs',                     label: 'Marketplace Jobs', icon: '🧾' },
+  { href: '/admin/offers',                   label: 'Offers',          icon: '📨' },
+  { href: '/admin/whatsapp',                 label: 'WhatsApp',        icon: '💬' },
+  { href: '/admin/media',                    label: 'Media',           icon: '🖼️' },
   { href: '/admin/events',                   label: 'Events & QR',     icon: '🎫' },
   { href: '/admin/attendance',               label: 'Attendance Logs', icon: '📅' },
   { href: '/admin/reports/daily',            label: 'Daily Report',    icon: '📊' },
@@ -35,7 +42,7 @@ export function Sidebar() {
         })}
       </nav>
       <div className="p-3 border-t border-ink-200 text-xs text-ink-500">
-        Partime · Standalone MVP
+        Partime · Multi-tenant MVP
       </div>
     </aside>
   );

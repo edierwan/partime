@@ -7,7 +7,7 @@ import { normalizeAliasPanggilan, normalizeMalaysiaPhone } from '@/lib/staff';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request, { params }: { params: { token: string } }) {
-  const event = await prisma.workEvent.findUnique({ where: { scanToken: params.token } });
+  const event = await prisma.workEvent.findUnique({ where: { scanToken: params.token }, include: { tenant: true } });
   if (!event || !event.active) {
     return NextResponse.json({ ok: false, error: 'Event not available' }, { status: 200 });
   }
@@ -37,23 +37,35 @@ export async function POST(req: Request, { params }: { params: { token: string }
 
   if (!staff) {
     await prisma.scanLog.create({
-      data: { eventId: event.id, action: 'LOOKUP', message: 'Staff not found', userAgent: req.headers.get('user-agent')?.slice(0, 250) },
+      data: { tenantId: event.tenantId, eventId: event.id, action: 'LOOKUP', message: 'Part-timer not found', userAgent: req.headers.get('user-agent')?.slice(0, 250) },
     });
-    return NextResponse.json({ ok: false, error: 'Staff not found. Check your phone number, email, or alias.' });
+    return NextResponse.json({ ok: false, error: 'Part-timer not found. Check your phone number, email, or alias.' });
   }
 
   const allowPendingClockIn = await getBooleanAppSetting(ALLOW_PENDING_CLOCK_IN_KEY, false);
+  const tenantApproval = await prisma.tenantPartTimerApproval.findUnique({
+    where: { tenantId_partTimerId: { tenantId: event.tenantId, partTimerId: staff.id } },
+    select: { status: true },
+  });
 
   const openSession = await prisma.attendanceSession.findFirst({
     where: { eventId: event.id, staffId: staff.id, status: 'OPEN', workDate: { gte: mytStartOfDay(now), lte: mytEndOfDay(now) } },
     select: { id: true, clockInAt: true },
   });
 
-  const warning = staff.approvalStatus === 'PENDING_REVIEW'
-    ? 'Your registration is pending admin review. Clock-in stays blocked until approval unless admin has enabled pending access.'
-    : staff.approvalStatus === 'REJECTED'
-      ? 'Your registration is currently rejected. Please contact admin.'
+  const warning = staff.status === 'PENDING_REVIEW'
+    ? 'Your profile is pending admin approval.'
+    : staff.status === 'REJECTED' || staff.status === 'SUSPENDED'
+      ? 'Your profile is not currently allowed to clock in. Please contact admin.'
+      : tenantApproval?.status === 'BLOCKED'
+        ? `This part-timer is blocked for ${event.tenant.name}. Please contact admin.`
+        : tenantApproval?.status === 'PENDING'
+          ? `This part-timer is pending approval for ${event.tenant.name}.`
       : null;
+
+  const canClockIn = (
+    staff.status === 'ACTIVE' || (staff.status === 'PENDING_REVIEW' && allowPendingClockIn)
+  ) && tenantApproval?.status !== 'BLOCKED' && tenantApproval?.status !== 'PENDING';
 
   return NextResponse.json({
     ok: true,
@@ -63,10 +75,11 @@ export async function POST(req: Request, { params }: { params: { token: string }
       payName: staff.payName,
       aliasPanggilan: staff.aliasPanggilan,
       approvalStatus: staff.approvalStatus,
+      status: staff.status,
       profileImageUrl: staff.profileImageUrl,
     },
     openSession: openSession ? { id: openSession.id, clockInAt: openSession.clockInAt.toISOString() } : null,
-    canClockIn: staff.approvalStatus === 'APPROVED' || allowPendingClockIn,
+    canClockIn,
     warning,
   });
 }

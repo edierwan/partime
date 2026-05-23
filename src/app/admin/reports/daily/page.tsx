@@ -9,7 +9,7 @@ import { formatMalaysiaPhoneDisplay, maskBankAccountNumber, resolveBankName } fr
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type SP = { date?: string; eventId?: string };
+type SP = { date?: string; eventId?: string; tenantId?: string };
 
 export default async function DailyReportPage({ searchParams }: { searchParams: SP }) {
   const now = new Date();
@@ -18,14 +18,17 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
   const dayEnd = mytEndOfDay(date);
 
   const where: any = { workDate: { gte: dayStart, lte: dayEnd }, status: { in: ['COMPLETED', 'MANUAL_ADJUSTED', 'OPEN', 'MISSING_CLOCK_OUT'] } };
+  if (searchParams.tenantId && searchParams.tenantId !== 'all') where.tenantId = searchParams.tenantId;
   if (searchParams.eventId && searchParams.eventId !== 'all') where.eventId = searchParams.eventId;
 
-  const [sessions, events, weekSessions] = await Promise.all([
+  const weekWhere: any = { workDate: { gte: mytStartOfWeek(date), lte: mytEndOfWeek(date) }, status: { in: ['COMPLETED','MANUAL_ADJUSTED'] } };
+  if (searchParams.tenantId && searchParams.tenantId !== 'all') weekWhere.tenantId = searchParams.tenantId;
+
+  const [sessions, events, tenants, weekSessions] = await Promise.all([
     prisma.attendanceSession.findMany({ where, include: { staff: true, event: true }, orderBy: { staff: { fullName: 'asc' } } }),
-    prisma.workEvent.findMany({ orderBy: { workDate: 'desc' }, take: 100 }),
-    prisma.attendanceSession.findMany({
-      where: { workDate: { gte: mytStartOfWeek(date), lte: mytEndOfWeek(date) }, status: { in: ['COMPLETED','MANUAL_ADJUSTED'] } },
-    }),
+    prisma.workEvent.findMany({ where: searchParams.tenantId && searchParams.tenantId !== 'all' ? { tenantId: searchParams.tenantId } : undefined, orderBy: { workDate: 'desc' }, take: 100 }),
+    prisma.tenant.findMany({ orderBy: { name: 'asc' } }),
+    prisma.attendanceSession.findMany({ where: weekWhere }),
   ]);
 
   const payableSum = sessions.reduce((a, s) => a + (s.payableMinutes ?? 0), 0);
@@ -47,6 +50,7 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
   const defaultRate = sessions[0]?.hourlyRateSnapshotCents ?? events[0]?.defaultRateCents ?? 0;
 
   const csvParams = new URLSearchParams({ date: searchParams.date || isoDate(date) });
+  if (searchParams.tenantId) csvParams.set('tenantId', searchParams.tenantId);
   if (searchParams.eventId) csvParams.set('eventId', searchParams.eventId);
 
   return (
@@ -62,10 +66,17 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
         </div>
       </div>
 
-      <form className="card card-pad grid grid-cols-1 md:grid-cols-3 gap-3 no-print" action="/admin/reports/daily" method="get">
+      <form className="card card-pad grid grid-cols-1 md:grid-cols-4 gap-3 no-print" action="/admin/reports/daily" method="get">
         <div>
           <label className="label">Date</label>
           <input type="date" name="date" className="input" defaultValue={searchParams.date || isoDate(date)} />
+        </div>
+        <div>
+          <label className="label">Employer</label>
+          <select name="tenantId" className="input" defaultValue={searchParams.tenantId || 'all'}>
+            <option value="all">All Employers</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">Event</label>
@@ -80,7 +91,7 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Hourly Rate (Default)" value={formatMYR(defaultRate)} icon="👤" accent="green" hint="Most recent rate" />
         <StatCard label="Total Payable"         value={formatMYR(paySum)}      icon="👥" accent="violet" hint={`For ${formatDate(date)}`} />
-        <StatCard label="Total Hours"           value={formatHours(payableSum)} icon="⏱" accent="blue"  hint={`Across ${sessions.length} staff`} />
+        <StatCard label="Total Hours"           value={formatHours(payableSum)} icon="⏱" accent="blue"  hint={`Across ${sessions.length} part-timers`} />
         <StatCard label="Review Notes Count"    value={notesCount}             icon="📝" accent="amber" hint={notesCount ? 'Requires attention' : '—'} />
       </div>
 
@@ -106,7 +117,7 @@ export default async function DailyReportPage({ searchParams }: { searchParams: 
         <div className="card lg:col-span-2 overflow-x-auto">
           <div className="px-5 py-3 border-b border-ink-200 flex items-center justify-between">
             <div className="font-semibold">Daily Report — {formatDate(date)}</div>
-            <div className="text-xs text-ink-500">{sessions.length} staff · {formatHours(payableSum)} hours · {formatMYR(paySum)}</div>
+            <div className="text-xs text-ink-500">{sessions.length} part-timers · {formatHours(payableSum)} hours · {formatMYR(paySum)}</div>
           </div>
           <table className="table-base">
             <thead>

@@ -19,7 +19,9 @@ export async function GET(req: Request) {
   const dayStart = mytStartOfDay(base);
   const dayEnd = mytEndOfDay(base);
   const where: any = { workDate: { gte: dayStart, lte: dayEnd } };
+  const tenantId = searchParams.get('tenantId');
   const eventId = searchParams.get('eventId');
+  if (tenantId && tenantId !== 'all') where.tenantId = tenantId;
   if (eventId && eventId !== 'all') where.eventId = eventId;
 
   const sessions = await prisma.attendanceSession.findMany({

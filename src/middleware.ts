@@ -27,10 +27,14 @@ export async function middleware(req: NextRequest) {
   // Public paths
   if (
     pathname.startsWith('/scan') ||
+    pathname.startsWith('/jobs') ||
+    pathname.startsWith('/part-timer') ||
     pathname.startsWith('/register') ||
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/scan') ||
+    pathname.startsWith('/api/webhooks/baileys/inbound') ||
     pathname.startsWith('/api/public/register') ||
+    pathname.startsWith('/api/public/otp') ||
     pathname === '/login' ||
     pathname === '/' ||
     pathname === '/api/auth/login' ||
@@ -39,7 +43,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin') || pathname.startsWith('/employer')) {
     const authed = await isAuthed(req);
     if (!authed) {
       if (pathname.startsWith('/api/')) {

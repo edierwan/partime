@@ -8,11 +8,14 @@ import { toDateInputValue } from '@/lib/time';
 
 interface EventData {
   id?: string;
+  tenantId: string;
   name: string; location: string; workDate: Date;
   defaultRateCents: number; autoBreakRule: boolean; active: boolean; notes: string | null;
 }
 
-export function EventClient({ mode, event }: { mode: 'addButton' | 'row'; event?: EventData }) {
+type TenantOption = { id: string; name: string };
+
+export function EventClient({ mode, event, tenants }: { mode: 'addButton' | 'row'; event?: EventData; tenants: TenantOption[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   function close() { setOpen(false); router.refresh(); }
@@ -21,12 +24,12 @@ export function EventClient({ mode, event }: { mode: 'addButton' | 'row'; event?
       {mode === 'addButton'
         ? <button className="btn-primary" onClick={() => setOpen(true)}>+ Create Event</button>
         : <button className="text-brand-600 text-sm hover:underline" onClick={() => setOpen(true)}>Edit</button>}
-      {open && <EventForm initial={event} onClose={close} />}
+      {open && <EventForm initial={event} tenants={tenants} onClose={close} />}
     </>
   );
 }
 
-function EventForm({ initial, onClose }: { initial?: EventData; onClose: () => void }) {
+function EventForm({ initial, tenants, onClose }: { initial?: EventData; tenants: TenantOption[]; onClose: () => void }) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [fieldErrs, setFieldErrs] = useState<Record<string, string>>({});
@@ -47,7 +50,7 @@ function EventForm({ initial, onClose }: { initial?: EventData; onClose: () => v
       open
       onClose={onClose}
       title={initial?.id ? 'Edit Event' : 'Create Event'}
-      subtitle="Generate a public QR for staff attendance."
+      subtitle="Generate a public QR for part-timer attendance."
       footer={
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="btn-ghost">Cancel</button>
@@ -57,6 +60,13 @@ function EventForm({ initial, onClose }: { initial?: EventData; onClose: () => v
     >
       <form id="event-form" onSubmit={onSubmit} className="space-y-4">
         {initial?.id && <input type="hidden" name="id" value={initial.id} />}
+        <div>
+          <label className="label">Employer *</label>
+          <select className="input" name="tenantId" defaultValue={initial?.tenantId || tenants[0]?.id || ''}>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+          </select>
+          {fieldErrs.tenantId && <p className="text-xs text-rose-600 mt-1">{fieldErrs.tenantId}</p>}
+        </div>
         <Field name="name" label="Event Name *" placeholder="e.g. Mid Valley Promo" defaultValue={initial?.name} error={fieldErrs.name} />
         <Field name="location" label="Location *" placeholder="e.g. Mid Valley, Kuala Lumpur" defaultValue={initial?.location} error={fieldErrs.location} />
         <div>
@@ -68,9 +78,9 @@ function EventForm({ initial, onClose }: { initial?: EventData; onClose: () => v
         <Toggle name="autoBreakRule" label="Auto Break Rule" hint="Automatically deduct break time based on company policy." defaultChecked={initial?.autoBreakRule ?? true} />
         <div>
           <label className="label">Notes</label>
-          <textarea className="input min-h-[70px]" name="notes" placeholder="e.g. Bring your staff ID and arrive 15 minutes early." defaultValue={initial?.notes || ''} />
+          <textarea className="input min-h-[70px]" name="notes" placeholder="e.g. Arrive 15 minutes early." defaultValue={initial?.notes || ''} />
         </div>
-        <Toggle name="active" label="Active" hint="Event is active and visible to staff." defaultChecked={initial?.active ?? true} />
+        <Toggle name="active" label="Active" hint="Event is active and visible to part-timers." defaultChecked={initial?.active ?? true} />
         {err && <div className="text-sm text-rose-600">{err}</div>}
       </form>
     </SlideOver>

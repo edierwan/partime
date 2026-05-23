@@ -10,7 +10,7 @@ import { WeeklyExpand } from './WeeklyExpand';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type SP = { week?: string; eventId?: string; staffId?: string };
+type SP = { week?: string; eventId?: string; staffId?: string; tenantId?: string };
 
 export default async function WeeklyPayrollPage({ searchParams }: { searchParams: SP }) {
   const now = new Date();
@@ -19,16 +19,18 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
   const weekEnd = mytEndOfWeek(base);
 
   const where: any = { workDate: { gte: weekStart, lte: weekEnd } };
+  if (searchParams.tenantId && searchParams.tenantId !== 'all') where.tenantId = searchParams.tenantId;
   if (searchParams.eventId && searchParams.eventId !== 'all') where.eventId = searchParams.eventId;
   if (searchParams.staffId && searchParams.staffId !== 'all') where.staffId = searchParams.staffId;
 
-  const [sessions, events, staffList] = await Promise.all([
+  const [sessions, events, tenants, staffList] = await Promise.all([
     prisma.attendanceSession.findMany({
       where,
       include: { staff: true, event: true },
       orderBy: [{ staffId: 'asc' }, { workDate: 'asc' }],
     }),
-    prisma.workEvent.findMany({ orderBy: { workDate: 'desc' }, take: 100 }),
+    prisma.workEvent.findMany({ where: searchParams.tenantId && searchParams.tenantId !== 'all' ? { tenantId: searchParams.tenantId } : undefined, orderBy: { workDate: 'desc' }, take: 100 }),
+    prisma.tenant.findMany({ orderBy: { name: 'asc' } }),
     prisma.staff.findMany({ orderBy: { fullName: 'asc' } }),
   ]);
 
@@ -55,7 +57,7 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
   const groups = Array.from(byStaff.values());
 
   const summary = {
-    totalStaff: groups.length,
+    totalPartTimers: groups.length,
     gross:   groups.reduce((a, g) => a + g.totals.gross,   0),
     deduct:  groups.reduce((a, g) => a + g.totals.deduct,  0),
     payable: groups.reduce((a, g) => a + g.totals.payable, 0),
@@ -65,6 +67,7 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
   };
 
   const csvParams = new URLSearchParams({ week: searchParams.week || isoDate(weekStart) });
+  if (searchParams.tenantId) csvParams.set('tenantId', searchParams.tenantId);
   if (searchParams.eventId) csvParams.set('eventId', searchParams.eventId);
   if (searchParams.staffId) csvParams.set('staffId', searchParams.staffId);
 
@@ -82,10 +85,17 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
         </div>
       </div>
 
-      <form className="card card-pad grid grid-cols-1 md:grid-cols-4 gap-3 no-print" action="/admin/reports/weekly-payroll" method="get">
+      <form className="card card-pad grid grid-cols-1 md:grid-cols-5 gap-3 no-print" action="/admin/reports/weekly-payroll" method="get">
         <div>
           <label className="label">Week (pick any date)</label>
           <input className="input" type="date" name="week" defaultValue={searchParams.week || isoDate(weekStart)} />
+        </div>
+        <div>
+          <label className="label">Employer</label>
+          <select className="input" name="tenantId" defaultValue={searchParams.tenantId || 'all'}>
+            <option value="all">All Employers</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">Event</label>
@@ -95,9 +105,9 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
           </select>
         </div>
         <div>
-          <label className="label">Staff</label>
+          <label className="label">Part-timer</label>
           <select className="input" name="staffId" defaultValue={searchParams.staffId || 'all'}>
-            <option value="all">All Staff</option>
+            <option value="all">All Part-timers</option>
             {staffList.map((s) => <option key={s.id} value={s.id}>{s.fullName}</option>)}
           </select>
         </div>
@@ -105,7 +115,7 @@ export default async function WeeklyPayrollPage({ searchParams }: { searchParams
       </form>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard label="Total Staff"        value={summary.totalStaff}             icon="👥" />
+        <StatCard label="Total Part-timers"  value={summary.totalPartTimers}        icon="👥" />
         <StatCard label="Gross Hours"        value={formatHours(summary.gross)}     icon="⏱" />
         <StatCard label="Break Deduct"       value={formatHours(summary.deduct)}    icon="🍱" accent="amber" />
         <StatCard label="Payable Hours"      value={formatHours(summary.payable)}   icon="✓"  accent="green" />

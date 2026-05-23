@@ -1,6 +1,6 @@
 import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 
-export type StaffGenderValue = 'LELAKI' | 'PEREMPUAN' | 'UNKNOWN';
+export type StaffGenderValue = 'LELAKI' | 'PEREMPUAN' | 'TIDAK_DINYATAKAN';
 
 export interface ValidationResult {
   ok: boolean;
@@ -13,6 +13,32 @@ export interface BankOption {
   minLength?: number;
   maxLength?: number;
 }
+
+export interface NationalityOption {
+  code: string;
+  label: string;
+}
+
+export const NATIONALITY_OPTIONS: NationalityOption[] = [
+  { code: 'Malaysia', label: 'Malaysia' },
+  { code: 'Indonesia', label: 'Indonesia' },
+  { code: 'Bangladesh', label: 'Bangladesh' },
+  { code: 'Nepal', label: 'Nepal' },
+  { code: 'Myanmar', label: 'Myanmar' },
+  { code: 'Pakistan', label: 'Pakistan' },
+  { code: 'India', label: 'India' },
+  { code: 'Philippines', label: 'Philippines' },
+  { code: 'Thailand', label: 'Thailand' },
+  { code: 'Other', label: 'Other' },
+];
+
+export const AVAILABILITY_OPTIONS = [
+  'Weekdays',
+  'Weekends',
+  'Night shift',
+  'Full day',
+  'Event-based',
+] as const;
 
 export const MALAYSIA_BANK_OPTIONS: BankOption[] = [
   { code: 'MAYBANK', label: 'Maybank', minLength: 10, maxLength: 12 },
@@ -114,8 +140,18 @@ export function maskIcNumber(normalized: string | null | undefined): string {
 
 export function genderFromIc(normalized: string): StaffGenderValue {
   const digits = normalizeIcNumber(normalized);
-  if (digits.length !== 12) return 'UNKNOWN';
+  if (digits.length !== 12) return 'TIDAK_DINYATAKAN';
   return Number(digits.slice(-1)) % 2 === 0 ? 'PEREMPUAN' : 'LELAKI';
+}
+
+export function normalizePassportNumber(input: string): string {
+  return String(input || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 32);
+}
+
+export function displayGender(gender: string | null | undefined): string {
+  if (gender === 'LELAKI') return 'Lelaki';
+  if (gender === 'PEREMPUAN') return 'Perempuan';
+  return 'Tidak dinyatakan';
 }
 
 export function normalizeBankAccount(input: string): string {

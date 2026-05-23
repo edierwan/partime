@@ -14,7 +14,7 @@ export function TopBar({ adminName, adminEmail }: { adminName?: string; adminEma
       <div className="px-6 h-16 flex items-center gap-4">
         <div className="flex-1 max-w-xl">
           <div className="relative">
-            <input className="input pl-9" placeholder="Search staff, events, logs…" />
+            <input className="input pl-9" placeholder="Search part-timers, events, logs…" />
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400">🔎</span>
           </div>
         </div>

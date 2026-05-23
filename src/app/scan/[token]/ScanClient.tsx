@@ -12,6 +12,7 @@ interface LookupResult {
     payName: string;
     aliasPanggilan: string;
     approvalStatus: 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
+    status?: 'PENDING_OTP' | 'PENDING_REVIEW' | 'ACTIVE' | 'INACTIVE' | 'REJECTED' | 'SUSPENDED';
     profileImageUrl?: string | null;
   };
   openSession?: { id: string; clockInAt: string };
@@ -132,12 +133,12 @@ export function ScanClient({ token, eventName }: { token: string; eventName: str
       {lookup?.ok && lookup.staff && (
         <div className="mt-5 space-y-3">
           <div className="card card-pad bg-ink-50/50">
-            <div className="text-xs text-emerald-700 mb-1">● Staff Found</div>
+            <div className="text-xs text-emerald-700 mb-1">● Part-timer Found</div>
             <div className="flex items-center gap-3">
               <Avatar name={lookup.staff.fullName} src={lookup.staff.profileImageUrl} className="h-12 w-12 text-sm" />
               <div>
                 <div className="font-semibold">{lookup.staff.fullName}</div>
-                <div className="text-xs text-ink-500">Staff ID: {lookup.staff.aliasPanggilan}</div>
+                <div className="text-xs text-ink-500">Part-timer ID: {lookup.staff.aliasPanggilan}</div>
               </div>
             </div>
             {lookup.openSession && (

@@ -12,7 +12,7 @@ import { AdjustClient } from './AdjustClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type SP = { from?: string; to?: string; eventId?: string; status?: string; q?: string };
+type SP = { from?: string; to?: string; eventId?: string; status?: string; q?: string; tenantId?: string };
 
 export default async function AttendancePage({ searchParams }: { searchParams: SP }) {
   const now = new Date();
@@ -20,6 +20,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
   const toDate   = searchParams.to   ? new Date(mytEndOfDay(parseDateInput(searchParams.to)).getTime()) : mytEndOfDay(now);
 
   const where: any = { workDate: { gte: fromDate, lte: toDate } };
+  if (searchParams.tenantId && searchParams.tenantId !== 'all') where.tenantId = searchParams.tenantId;
   if (searchParams.eventId && searchParams.eventId !== 'all') where.eventId = searchParams.eventId;
   if (searchParams.status && searchParams.status !== 'all') where.status = searchParams.status;
   if (searchParams.q) {
@@ -32,16 +33,18 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
     ]};
   }
 
-  const [sessions, events, openCount, completedToday, manualToday, allOpenSessions] = await Promise.all([
+  const tenantWhere = searchParams.tenantId && searchParams.tenantId !== 'all' ? { tenantId: searchParams.tenantId } : undefined;
+  const [sessions, events, tenants, openCount, completedToday, manualToday, allOpenSessions] = await Promise.all([
     prisma.attendanceSession.findMany({
       where, include: { staff: true, event: true },
       orderBy: [{ workDate: 'desc' }, { clockInAt: 'desc' }], take: 300,
     }),
-    prisma.workEvent.findMany({ orderBy: { workDate: 'desc' }, take: 100 }),
-    prisma.attendanceSession.count({ where: { status: 'OPEN' } }),
-    prisma.attendanceSession.count({ where: { status: 'COMPLETED', workDate: { gte: mytStartOfDay(now), lte: mytEndOfDay(now) } } }),
-    prisma.attendanceSession.count({ where: { status: 'MANUAL_ADJUSTED', workDate: { gte: mytStartOfDay(now), lte: mytEndOfDay(now) } } }),
-    prisma.attendanceSession.findMany({ where: { status: 'OPEN' }, select: { clockInAt: true } }),
+    prisma.workEvent.findMany({ where: tenantWhere, orderBy: { workDate: 'desc' }, take: 100 }),
+    prisma.tenant.findMany({ orderBy: { name: 'asc' } }),
+    prisma.attendanceSession.count({ where: { ...(tenantWhere || {}), status: 'OPEN' } }),
+    prisma.attendanceSession.count({ where: { ...(tenantWhere || {}), status: 'COMPLETED', workDate: { gte: mytStartOfDay(now), lte: mytEndOfDay(now) } } }),
+    prisma.attendanceSession.count({ where: { ...(tenantWhere || {}), status: 'MANUAL_ADJUSTED', workDate: { gte: mytStartOfDay(now), lte: mytEndOfDay(now) } } }),
+    prisma.attendanceSession.findMany({ where: { ...(tenantWhere || {}), status: 'OPEN' }, select: { clockInAt: true } }),
   ]);
 
   const missingCount = allOpenSessions.filter(s => isMissingClockOut(now, s.clockInAt, null)).length;
@@ -60,7 +63,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
         <StatCard label="Manual Adjustments (Today)" value={manualToday} icon="✏️" accent="amber" />
       </div>
 
-      <form className="card card-pad grid grid-cols-1 md:grid-cols-5 gap-3" action="/admin/attendance" method="get">
+      <form className="card card-pad grid grid-cols-1 md:grid-cols-6 gap-3" action="/admin/attendance" method="get">
         <div>
           <label className="label">From</label>
           <input type="date" name="from" className="input" defaultValue={searchParams.from || isoDate(fromDate)} />
@@ -68,6 +71,13 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
         <div>
           <label className="label">To</label>
           <input type="date" name="to" className="input" defaultValue={searchParams.to || isoDate(toDate)} />
+        </div>
+        <div>
+          <label className="label">Employer</label>
+          <select name="tenantId" className="input" defaultValue={searchParams.tenantId || 'all'}>
+            <option value="all">All Employers</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+          </select>
         </div>
         <div>
           <label className="label">Event</label>
@@ -84,7 +94,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
           </select>
         </div>
         <div className="flex items-end gap-2">
-          <input name="q" className="input flex-1" defaultValue={searchParams.q || ''} placeholder="Search staff…" />
+          <input name="q" className="input flex-1" defaultValue={searchParams.q || ''} placeholder="Search part-timer…" />
           <button className="btn-primary" type="submit">Filter</button>
         </div>
       </form>
@@ -93,7 +103,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: S
         <table className="table-base">
           <thead>
             <tr>
-              <th>Date</th><th>Event</th><th>Staff</th><th>Phone</th>
+              <th>Date</th><th>Event</th><th>Part-timer</th><th>Phone</th>
               <th>Clock In</th><th>Clock Out</th>
               <th className="text-right">Gross</th><th className="text-right">Deduct</th>
               <th className="text-right">Payable</th><th className="text-right">Rate</th>

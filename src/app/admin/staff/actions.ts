@@ -11,7 +11,7 @@ export type StaffFormState = { ok: boolean; error?: string; fieldErrors?: Record
 export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffFormState> {
   await requireSession();
 
-  const parsed = await parseStaffProfileForm(fd, { defaultApprovalStatus: 'APPROVED', defaultActive: true });
+  const parsed = await parseStaffProfileForm(fd, { defaultApprovalStatus: 'APPROVED', defaultStatus: 'ACTIVE', defaultActive: true });
   if (!parsed.ok) return parsed;
 
   const value = parsed.data;
@@ -34,6 +34,9 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
             icNumberNormalized: value.icNumberNormalized,
             icNumberDisplay: value.icNumberDisplay,
             gender: value.gender,
+            nationality: value.nationality,
+            otherNationality: value.otherNationality,
+            passportNumber: value.passportNumber,
             phoneE164: value.phoneE164,
             phoneDisplay: value.phoneDisplay,
             email: value.email,
@@ -42,6 +45,9 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
             customBankName: value.customBankName,
             bankAccountNumber: value.bankAccountNumber,
             approvalStatus: value.approvalStatus,
+            status: value.status,
+            preferredLocation: value.preferredLocation,
+            availability: value.availability,
             active: value.active,
             notes: value.notes,
           },
@@ -55,6 +61,9 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
           icNumberNormalized: value.icNumberNormalized,
           icNumberDisplay: value.icNumberDisplay,
           gender: value.gender,
+          nationality: value.nationality,
+          otherNationality: value.otherNationality,
+          passportNumber: value.passportNumber,
           phoneE164: value.phoneE164,
           phoneDisplay: value.phoneDisplay,
           email: value.email,
@@ -63,6 +72,9 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
           customBankName: value.customBankName,
           bankAccountNumber: value.bankAccountNumber,
           approvalStatus: value.approvalStatus,
+          status: value.status,
+          preferredLocation: value.preferredLocation,
+          availability: value.availability,
           active: value.active,
           notes: value.notes,
         },
@@ -114,6 +126,7 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
     return { ok: false, error: 'Save failed' };
   }
   revalidatePath('/admin/staff');
+  revalidatePath('/admin/part-timers');
   revalidatePath('/admin/attendance');
   revalidatePath('/admin/reports/daily');
   revalidatePath('/admin/reports/weekly-payroll');
@@ -123,19 +136,23 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
 
 export async function deactivateStaff(id: string) {
   await requireSession();
-  await prisma.staff.update({ where: { id }, data: { active: false } });
+  await prisma.staff.update({ where: { id }, data: { active: false, status: 'INACTIVE' } });
   revalidatePath('/admin/staff');
+  revalidatePath('/admin/part-timers');
 }
 
 export async function activateStaff(id: string) {
   await requireSession();
-  await prisma.staff.update({ where: { id }, data: { active: true } });
+  await prisma.staff.update({ where: { id }, data: { active: true, status: 'ACTIVE', approvalStatus: 'APPROVED' } });
   revalidatePath('/admin/staff');
+  revalidatePath('/admin/part-timers');
 }
 
 export async function setStaffApprovalStatus(id: string, approvalStatus: 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED') {
   await requireSession();
-  await prisma.staff.update({ where: { id }, data: { approvalStatus } });
+  const status = approvalStatus === 'APPROVED' ? 'ACTIVE' : approvalStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_REVIEW';
+  await prisma.staff.update({ where: { id }, data: { approvalStatus, status, active: status !== 'REJECTED' } });
   revalidatePath('/admin/staff');
+  revalidatePath('/admin/part-timers');
   revalidatePath('/admin/attendance');
 }

@@ -1,0 +1,6 @@
+import { prisma } from '@/lib/db';
+
+export default async function EmployerPartTimersPage() {
+  const partTimers = await prisma.staff.findMany({ where: { active: true, status: 'ACTIVE' }, include: { skills: { include: { skill: true } }, portfolioMedia: true }, orderBy: { fullName: 'asc' }, take: 100 });
+  return <div className="space-y-5"><div><h1 className="sectiontitle">Part-timers</h1><p className="subtitle">Approved profiles available for job offers.</p></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{partTimers.map((partTimer) => <div key={partTimer.id} className="card card-pad"><div className="font-semibold text-ink-950">{partTimer.fullName}</div><div className="text-sm text-ink-500">{partTimer.preferredLocation || partTimer.city || 'Malaysia'} - {partTimer.phoneDisplay || partTimer.phoneE164}</div><div className="mt-3 flex flex-wrap gap-1">{partTimer.skills.slice(0, 6).map(({ skill }) => <span key={skill.id} className="rounded-md bg-brand-50 px-2 py-1 text-xs text-brand-700">{skill.nameEn}</span>)}</div><div className="mt-3 text-xs text-ink-500">Portfolio media: {partTimer.portfolioMedia.length}</div></div>)}</div></div>;
+}

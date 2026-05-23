@@ -11,9 +11,19 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 | email | String unique | login |
 | passwordHash | String | bcrypt |
 | name | String? | display |
+| platformRole | String | platform admin role marker |
 | createdAt | DateTime | |
 
-### Staff
+### Tenant
+Employer workspace. `WorkEvent`, `AttendanceSession`, and `ScanLog` carry `tenantId` for tenant-aware filtering and future tenant-admin isolation.
+
+### TenantMembership
+Links future tenant admins/managers/viewers to a tenant. Full tenant RBAC is not yet implemented in the admin shell.
+
+### EmployerRegistration
+Public employer application linked to an optional `Tenant`. Status: `PENDING_OTP / PENDING_REVIEW / APPROVED / REJECTED`.
+
+### Staff / Part-timer
 | field | type | notes |
 |---|---|---|
 | id | String (cuid) | PK |
@@ -22,7 +32,10 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 | fullName | String | legal full name |
 | icNumberNormalized | String? unique | normalized 12-digit IC |
 | icNumberDisplay | String? | display-ready IC |
-| gender | Enum | `LELAKI / PEREMPUAN / UNKNOWN` |
+| gender | Enum | `LELAKI / PEREMPUAN / TIDAK_DINYATAKAN` |
+| nationality | String | default `Malaysia` |
+| otherNationality | String? | required when nationality = Other |
+| passportNumber | String? | required for non-Malaysians |
 | phoneE164 | String unique | normalized `+60...` mobile |
 | phoneDisplay | String? | human-friendly display |
 | email | String? unique | optional |
@@ -33,14 +46,24 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 | profileImageUrl | String? | public or local URL |
 | profileImageKey | String? | storage key |
 | approvalStatus | Enum | `APPROVED / PENDING_REVIEW / REJECTED` |
+| status | Enum | `PENDING_OTP / PENDING_REVIEW / ACTIVE / INACTIVE / REJECTED / SUSPENDED` |
+| preferredLocation | String? | |
+| availability | Json? | selected availability values |
 | active | Boolean | default true |
 | notes | String? | |
 | createdAt / updatedAt | DateTime | |
+
+### SkillCategory / Skill / PartTimerSkill
+Seeded skill catalog grouped by category. `PartTimerSkill` links part-timers to selected skills, including custom "Other" skills.
+
+### TenantPartTimerApproval
+Tenant-specific approval state for a part-timer: `PENDING / APPROVED / BLOCKED`. Scan lookup/clock-in blocks pending or blocked tenant approvals.
 
 ### WorkEvent
 | field | type | notes |
 |---|---|---|
 | id | String (cuid) | PK |
+| tenantId | FK Tenant | required |
 | name | String | |
 | location | String | |
 | workDate | DateTime (date) | MY date boundary |
@@ -55,6 +78,7 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 | field | type | notes |
 |---|---|---|
 | id | String (cuid) | PK |
+| tenantId | FK Tenant | required |
 | eventId | FK WorkEvent | cascade restrict |
 | staffId | FK Staff | restrict |
 | workDate | DateTime (date) | denormalized for grouping |
@@ -78,7 +102,7 @@ Unique: `(eventId, staffId, workDate)` to prevent duplicate open per day.
 | id | String | PK |
 | phoneE164 | String | OTP target |
 | codeHash | String | hashed 4-digit OTP |
-| purpose | Enum | `STAFF_REGISTER` |
+| purpose | Enum | `STAFF_REGISTER / PART_TIMER_REGISTER / EMPLOYER_REGISTER / STAFF_LOGIN / PART_TIMER_LOGIN` |
 | expiresAt | DateTime | 5-minute expiry |
 | consumedAt | DateTime? | null until verified |
 | attemptCount | Int | invalid-attempt counter |
@@ -94,6 +118,7 @@ Unique: `(eventId, staffId, workDate)` to prevent duplicate open per day.
 | field | type | notes |
 |---|---|---|
 | id | String | PK |
+| tenantId | FK Tenant? | copied from event when present |
 | eventId | FK | nullable if token invalid |
 | staffId | FK | nullable if lookup failed |
 | action | Enum | CLOCK_IN / CLOCK_OUT / LOOKUP / DUPLICATE / BLOCKED |

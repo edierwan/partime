@@ -4,6 +4,15 @@ import crypto from 'node:crypto';
 
 const prisma = new PrismaClient();
 
+const skillSeed = [
+  { slug: 'technical', name: 'Technical', skills: ['Wiring', 'Aircond', 'Plumbing', 'Electrical', 'CCTV', 'Networking', 'General repair'] },
+  { slug: 'general-work', name: 'General Work', skills: ['General helper', 'Event crew', 'Booth setup', 'Packing', 'Loading/unloading', 'Cleaning', 'Runner'] },
+  { slug: 'sales-promotion', name: 'Sales & Promotion', skills: ['Promoter', 'Product demo', 'Sampling crew', 'Roadshow crew', 'Customer service'] },
+  { slug: 'fb-hospitality', name: 'F&B / Hospitality', skills: ['Waiter', 'Kitchen helper', 'Barista helper', 'Cashier', 'Event server'] },
+  { slug: 'warehouse-logistics', name: 'Warehouse / Logistics', skills: ['Picker/packer', 'Stock count', 'Delivery assistant', 'Lalamove/runner coordination'] },
+  { slug: 'admin-data', name: 'Admin / Data', skills: ['Data entry', 'Registration counter', 'Queue management', 'Admin assistant'] },
+];
+
 function token(len = 10) {
   return crypto.randomBytes(len).toString('base64url').slice(0, len).toUpperCase();
 }
@@ -36,6 +45,35 @@ async function main() {
     console.log(`= Admin ${email} already exists, skipping.`);
   }
 
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: 'platform-default' },
+    update: {},
+    create: {
+      name: 'Partime Platform Default',
+      slug: 'platform-default',
+      phoneE164: '+60000000000',
+      email: 'admin@partime.local',
+      country: 'Malaysia',
+      status: 'ACTIVE',
+    },
+  });
+
+  for (const [categoryIndex, category] of skillSeed.entries()) {
+    const savedCategory = await prisma.skillCategory.upsert({
+      where: { slug: category.slug },
+      update: { nameMs: category.name, nameId: category.name, nameEn: category.name, active: true, sortOrder: categoryIndex },
+      create: { slug: category.slug, nameMs: category.name, nameId: category.name, nameEn: category.name, active: true, sortOrder: categoryIndex },
+    });
+    for (const [skillIndex, skill] of category.skills.entries()) {
+      const slug = skill.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      await prisma.skill.upsert({
+        where: { slug },
+        update: { categoryId: savedCategory.id, nameMs: skill, nameId: skill, nameEn: skill, active: true, sortOrder: skillIndex },
+        create: { categoryId: savedCategory.id, slug, nameMs: skill, nameId: skill, nameEn: skill, active: true, sortOrder: skillIndex },
+      });
+    }
+  }
+
   if (process.env.SEED_SAMPLE_DATA !== 'true') {
     console.log('Sample data skipped (set SEED_SAMPLE_DATA=true to add).');
     return;
@@ -59,6 +97,14 @@ async function main() {
       bankName: 'Maybank',
       bankAccountNumber: '512345678901',
       approvalStatus: 'APPROVED' as const,
+      status: 'ACTIVE' as const,
+      nationality: 'Malaysia',
+      state: 'Kuala Lumpur',
+      city: 'Kuala Lumpur',
+      bio: 'Experienced in roadshows, registration counters and event setup.',
+      experienceSummary: 'Roadshows, booth setup, queue management',
+      expectedRateCents: 1800,
+      publicProfile: true,
       active: true,
     },
     {
@@ -72,6 +118,14 @@ async function main() {
       bankName: 'CIMB Bank',
       bankAccountNumber: '860123456789',
       approvalStatus: 'APPROVED' as const,
+      status: 'ACTIVE' as const,
+      nationality: 'Malaysia',
+      state: 'Selangor',
+      city: 'Petaling Jaya',
+      bio: 'Friendly promoter and product sampling crew for mall activations.',
+      experienceSummary: 'Product demo, sampling, customer service',
+      expectedRateCents: 1700,
+      publicProfile: true,
       active: true,
     },
     {
@@ -85,6 +139,14 @@ async function main() {
       bankName: 'Maybank',
       bankAccountNumber: '514433221100',
       approvalStatus: 'APPROVED' as const,
+      status: 'ACTIVE' as const,
+      nationality: 'Malaysia',
+      state: 'Kuala Lumpur',
+      city: 'Cheras',
+      bio: 'Reliable runner and warehouse assistant for weekend shifts.',
+      experienceSummary: 'Picker/packer, runner, loading/unloading',
+      expectedRateCents: 1600,
+      publicProfile: true,
       active: true,
     },
     {
@@ -98,6 +160,14 @@ async function main() {
       bankName: 'Bank Islam',
       bankAccountNumber: '860112233344',
       approvalStatus: 'APPROVED' as const,
+      status: 'ACTIVE' as const,
+      nationality: 'Malaysia',
+      state: 'Selangor',
+      city: 'Shah Alam',
+      bio: 'F&B and hospitality support with registration counter experience.',
+      experienceSummary: 'Event server, cashier, registration counter',
+      expectedRateCents: 1600,
+      publicProfile: true,
       active: true,
     },
     {
@@ -108,6 +178,13 @@ async function main() {
       phoneE164: '+60177889900',
       phoneDisplay: '+60 17-788 9900',
       approvalStatus: 'PENDING_REVIEW' as const,
+      status: 'PENDING_REVIEW' as const,
+      nationality: 'Malaysia',
+      state: 'Selangor',
+      city: 'Subang Jaya',
+      bio: 'New applicant pending review.',
+      expectedRateCents: 1500,
+      publicProfile: false,
       active: true,
     },
   ];
@@ -115,19 +192,77 @@ async function main() {
   console.log(`✓ Inserted ${sampleStaff.length} sample staff`);
 
   const today = mytMidnight(new Date());
+  const promoterSkill = await prisma.skill.findUnique({ where: { slug: 'promoter' } });
+  const eventCrewSkill = await prisma.skill.findUnique({ where: { slug: 'event-crew' } });
+  const setupSkill = await prisma.skill.findUnique({ where: { slug: 'booth-setup' } });
   const event = await prisma.workEvent.create({
     data: {
       name: 'Mid Valley Promo',
+      slug: 'mid-valley-promo',
+      tenantId: tenant.id,
       location: 'Mid Valley Megamall, KL',
+      state: 'Kuala Lumpur',
+      city: 'Kuala Lumpur',
+      category: 'Promotions',
+      summary: 'Weekend product promoter for a mall activation booth.',
+      description: 'Assist product demo, sampling, visitor engagement and booth closing checklist. Black pants and plain dark shoes required.',
+      jobType: 'EVENT',
+      jobStatus: 'OPEN',
       workDate: today,
+      startTime: '10:00',
+      endTime: '22:00',
+      headcount: 6,
+      payType: 'HOURLY',
       defaultRateCents: 2000,
+      minRateCents: 1800,
+      maxRateCents: 2200,
+      publicVisible: true,
       autoBreakRule: true,
       active: true,
       scanToken: token(10),
       notes: 'Sample seeded event',
+      skills: {
+        create: [promoterSkill, eventCrewSkill, setupSkill].filter(Boolean).map((skill) => ({ skillId: skill!.id })),
+      },
     },
   });
   console.log(`✓ Created sample event "${event.name}" — token ${event.scanToken}`);
+
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const warehouseSkill = await prisma.skill.findUnique({ where: { slug: 'picker-packer' } });
+  const runnerSkill = await prisma.skill.findUnique({ where: { slug: 'runner' } });
+  const warehouseJob = await prisma.workEvent.create({
+    data: {
+      name: 'Shah Alam Warehouse Packing Crew',
+      slug: 'shah-alam-warehouse-packing-crew',
+      tenantId: tenant.id,
+      location: 'Seksyen 15, Shah Alam',
+      state: 'Selangor',
+      city: 'Shah Alam',
+      category: 'Warehouse',
+      summary: 'Packing and stock count crew for a one-day warehouse shift.',
+      description: 'Support packing, stock count, label checks and light loading. Safety briefing provided on arrival.',
+      jobType: 'SHIFT',
+      jobStatus: 'OPEN',
+      workDate: tomorrow,
+      startTime: '09:00',
+      endTime: '18:00',
+      headcount: 8,
+      payType: 'DAILY',
+      defaultRateCents: 12000,
+      minRateCents: 12000,
+      maxRateCents: 14000,
+      publicVisible: true,
+      autoBreakRule: true,
+      active: true,
+      scanToken: token(10),
+      notes: 'Sample marketplace warehouse job',
+      skills: {
+        create: [warehouseSkill, runnerSkill].filter(Boolean).map((skill) => ({ skillId: skill!.id })),
+      },
+    },
+  });
+  console.log(`✓ Created sample marketplace job "${warehouseJob.name}" — token ${warehouseJob.scanToken}`);
 
   // One completed attendance for the first staff
   const first = await prisma.staff.findFirst();
@@ -141,6 +276,7 @@ async function main() {
     await prisma.attendanceSession.create({
       data: {
         eventId: event.id,
+        tenantId: tenant.id,
         staffId: first.id,
         workDate: today,
         clockInAt: clockIn,

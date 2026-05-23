@@ -20,8 +20,10 @@ export async function GET(req: Request) {
   const weekEnd = mytEndOfWeek(base);
 
   const where: any = { workDate: { gte: weekStart, lte: weekEnd }, status: { in: ['COMPLETED', 'MANUAL_ADJUSTED'] } };
+  const tenantId = searchParams.get('tenantId');
   const eventId = searchParams.get('eventId');
   const staffId = searchParams.get('staffId');
+  if (tenantId && tenantId !== 'all') where.tenantId = tenantId;
   if (eventId && eventId !== 'all') where.eventId = eventId;
   if (staffId && staffId !== 'all') where.staffId = staffId;
 

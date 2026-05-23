@@ -24,10 +24,10 @@ export default async function LoginPage({
         </div>
         <LoginForm next={searchParams.next} />
         <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/70 p-4 text-sm text-ink-700">
-          <div className="font-medium text-ink-900">Register as part-time staff</div>
-          <p className="mt-1 text-ink-600">New staff can submit their profile and verify their WhatsApp number before admin review.</p>
+          <div className="font-medium text-ink-900">Part-timer or employer registration</div>
+          <p className="mt-1 text-ink-600">Apply as a part-timer or register your company workspace.</p>
           <Link href="/register" className="mt-3 inline-flex text-brand-700 font-medium hover:underline">
-            Open staff self-registration
+            Open registration page
           </Link>
         </div>
       </div>

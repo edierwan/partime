@@ -1,15 +1,21 @@
 # Partime
 
-Standalone part-time staff attendance and weekly payroll system.
+Part-timer marketplace, attendance, employer registration, WhatsApp offer flow, and weekly payroll system.
 
+- Mobile-first public job marketplace with search, public job detail, and interest capture
+- Employer workspace for posting jobs, reviewing part-timers, sending WhatsApp offers, tracking replies, and confirming workers
+- Part-timer portal for profile lookup, portfolio uploads, job browsing, offers, and attendance history
 - QR scan clock-in / clock-out from any phone
-- Admin dashboard (staff, events, attendance, weekly + daily reports, exceptions)
-- Staff self-registration with WhatsApp OTP and pending-review approval flow
-- Staff profiles with IC, gender, email, profile photo, and bank validation
+- Admin dashboard (part-timers, employers, marketplace jobs, WhatsApp logs, media, events, attendance, weekly + daily reports, exceptions)
+- Public language selector for Bahasa Melayu, Bahasa Indonesia, and English
+- Employer registration with tenant workspace review flow
+- Part-timer self-registration with WhatsApp OTP and pending-review approval flow
+- Part-timer profiles with nationality/passport, IC gender auto-detect, skills, profile photo, and bank validation
 - Auto break-deduct rule, manual adjustments with audit log
 - CSV export and print-friendly reports
 - No payment gateway, bank payout, or finance app integration
-- Optional S3-compatible profile photo storage and Baileys WhatsApp OTP delivery
+- Optional S3-compatible profile, portfolio, employer logo, and job media storage
+- Baileys WhatsApp OTP delivery plus offer send/reply webhook handling for tenant `partime`
 
 Stack: Next.js 14 (App Router), TypeScript, Tailwind, Prisma + PostgreSQL, JWT cookie auth (jose).
 
@@ -39,20 +45,21 @@ Open http://localhost:3000 → login with the seeded admin.
 | `NEXT_PUBLIC_APP_URL` | yes | `https://partime.getouch.co` |
 | `SEED_ADMIN_EMAIL` | seed only | `admin@partime.local` |
 | `SEED_ADMIN_PASSWORD` | seed only | strong password |
-| `SEED_SAMPLE_DATA` | optional | `true` to seed 5 sample staff + 1 sample event |
-| `S3_ENDPOINT` | optional | `https://s3.ap-southeast-1.amazonaws.com` or S3-compatible endpoint |
-| `S3_REGION` | optional with S3 | `ap-southeast-1` |
-| `S3_BUCKET` | optional with S3 | `partime-assets` |
+| `SEED_SAMPLE_DATA` | optional | `true` to seed sample part-timers + public marketplace jobs |
+| `S3_ENDPOINT` | optional | `https://s3api.getouch.co` or S3-compatible endpoint |
+| `S3_REGION` | optional with S3 | `us-east-1` |
+| `S3_BUCKET` | optional with S3 | `partime-prod` |
 | `S3_ACCESS_KEY_ID` | optional with S3 | access key for uploads |
 | `S3_SECRET_ACCESS_KEY` | optional with S3 | secret key for uploads |
-| `S3_PUBLIC_BASE_URL` | optional with S3 | `https://cdn.example.com` |
-| `LOCAL_UPLOAD_ROOT` | optional | `/app/uploads` |
-| `BAILEYS_API_BASE_URL` | required for OTP | `https://wa.getouch.co` |
-| `BAILEYS_TENANT` | required for OTP | `partime` |
-| `BAILEYS_API_KEY` | required for OTP | Baileys secret / API key |
+| `S3_PUBLIC_BASE_URL` | optional with S3 | leave blank to serve private S3 objects through `/api/uploads/*` |
+| `LOCAL_UPLOAD_ROOT` | optional | `/app/uploads/partime` |
+| `BAILEYS_API_BASE_URL` | required for OTP/offers | `https://wa.getouch.co` |
+| `BAILEYS_TENANT` | required for OTP/offers | `partime` |
+| `BAILEYS_API_KEY` | required for OTP/offers | Baileys secret / API key |
 | `BAILEYS_DEFAULT_COUNTRY` | optional | `MY` |
 | `BAILEYS_SEND_PATH` | optional | `/api/sessions/{tenant}/messages` |
 | `BAILEYS_AUTH_HEADER` | optional | `X-WAPI-Secret` |
+| `BAILEYS_WEBHOOK_SECRET` | required for inbound offer replies | Same value as gateway `WAPI_SECRET` |
 
 ---
 
@@ -67,14 +74,25 @@ npm run start         # serves on 0.0.0.0:3000
 
 Output is `output: 'standalone'` — Coolify / Docker friendly.
 
-### Staff self-registration prerequisites
+### Public registration prerequisites
 
-If you want `/register` + WhatsApp OTP to work in production, configure either:
+If you want `/register/part-timer`, `/register/employer`, portfolio media, job media, WhatsApp OTP, and WhatsApp offers to work in production, configure either:
 
-1. S3-compatible storage (`S3_*`) for staff profile photos.
+1. S3-compatible storage (`S3_*`) for profile photos, portfolio media, employer logos, and job media.
 2. Or local uploads with writable `LOCAL_UPLOAD_ROOT` and a persistent volume.
 
-For OTP delivery, configure the `BAILEYS_*` variables. The GetTouch repo currently confirms the direct Baileys gateway session route `/api/sessions/:id/messages` with `X-WAPI-Secret`, but does not expose a confirmed tenant-only send endpoint. Partime therefore keeps `BAILEYS_SEND_PATH` and `BAILEYS_AUTH_HEADER` env-driven instead of hardcoding an assumed tenant broker route.
+For OTP and offers, configure the outbound `BAILEYS_*` variables. The GetTouch Baileys runtime currently confirms the direct session route `/api/sessions/:id/messages` with `X-WAPI-Secret`, so Partime keeps `BAILEYS_SEND_PATH` and `BAILEYS_AUTH_HEADER` env-driven.
+
+For inbound offer replies, register the gateway webhook through the current env-based dispatcher:
+
+```bash
+WAPI_WEBHOOK_URL=https://partime.getouch.co/api/webhooks/baileys/inbound
+WAPI_SECRET=<same value as Partime BAILEYS_WEBHOOK_SECRET>
+```
+
+The Partime endpoint verifies `X-WA-Signature` or `X-WAPI-Signature` as HMAC-SHA256 over the raw JSON body, accepts the current gateway shape `{ sessionId, type, payload, timestamp }`, and normalizes `message.inbound`/`message.status` to `messages.upsert`/`messages.update` internally.
+
+GetTouch production storage is SeaweedFS. Use the S3 API hostname `https://s3api.getouch.co` for `S3_ENDPOINT`; `https://s3.getouch.co` is the browser console. The dedicated production bucket is `partime-prod` with a bucket-scoped app identity.
 
 ### One-time prod migration & seed
 
@@ -100,8 +118,9 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
    - `AUTH_SECRET` (`openssl rand -hex 32`)
    - `NEXT_PUBLIC_APP_URL=https://partime.getouch.co`
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` (for first deploy only)
-   - `LOCAL_UPLOAD_ROOT=/app/uploads` or the full `S3_*` set for profile photos
-   - `BAILEYS_API_BASE_URL`, `BAILEYS_TENANT`, `BAILEYS_API_KEY` for WhatsApp OTP
+      - `LOCAL_UPLOAD_ROOT=/app/uploads/partime` or the full `S3_*` set for media uploads
+      - `BAILEYS_API_BASE_URL`, `BAILEYS_TENANT`, `BAILEYS_API_KEY` for WhatsApp OTP and offers
+      - `BAILEYS_WEBHOOK_SECRET` for inbound Baileys offer replies
 8. After the first successful deploy, exec into the container once:
    ```bash
    npm run prisma:migrate    # prisma migrate deploy (applies committed migrations)
@@ -126,11 +145,16 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 
 **Money** stored in cents; durations stored in minutes (integers everywhere).
 
-**Staff registration:**
-- `/register` is public and creates staff in `PENDING_REVIEW` state after WhatsApp OTP verification.
-- Staff are looked up by Malaysia phone, email, or alias.
-- Pending-review staff can only clock in when the admin scan setting explicitly allows it.
-- Staff profile images store to S3-compatible storage when configured, otherwise to local disk under `/api/uploads/*`.
+**Public registration:**
+- `/register` lets the user choose Part-timer or Employer and stores the selected language.
+- `/register/part-timer` creates a part-timer in `PENDING_REVIEW` state after WhatsApp OTP verification.
+- `/register/employer` creates a pending tenant workspace and employer registration after OTP verification.
+- Malaysian IC numbers auto-detect jantina from the final digit; non-Malaysians use passport number.
+- Part-timers are looked up by Malaysia phone, email, or alias.
+- Pending-review part-timers can only clock in when the admin scan setting explicitly allows it.
+- Profile images store to S3-compatible storage when configured, otherwise to local disk under `/api/uploads/*`.
+- Portfolio images/videos, employer logos, job cover images, and job gallery media use the same private media path.
+- WhatsApp offer replies use `1` for interested and `2` for not interested; no live payment gateway is integrated.
 
 ---
 
@@ -139,9 +163,30 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | Route | Purpose |
 |---|---|
 | `/login` | Admin login |
-| `/register` | Public staff self-registration + OTP |
-| `/admin` | Dashboard (active staff, missing clock-outs, weekly totals) |
-| `/admin/staff` | Staff CRUD |
+| `/register` | Public language-aware registration choice |
+| `/register/part-timer` | Public part-timer registration + OTP |
+| `/register/employer` | Public employer registration + OTP |
+| `/jobs` | Public mobile-first job marketplace search |
+| `/jobs/[id]` | Public job detail and interest form |
+| `/part-timer` | Phone-based part-timer portal overview |
+| `/part-timer/profile` | Part-timer profile view |
+| `/part-timer/portfolio` | Part-timer portfolio image/video upload |
+| `/part-timer/jobs` | Part-timer job browser |
+| `/part-timer/offers` | Part-timer WhatsApp offer status |
+| `/part-timer/history` | Part-timer attendance history |
+| `/employer` | Authenticated employer workspace dashboard |
+| `/employer/jobs` | Employer job list and posting flow |
+| `/employer/part-timers` | Employer part-timer discovery |
+| `/employer/offers` | Employer WhatsApp offer send/status flow |
+| `/admin` | Dashboard (active part-timers, missing clock-outs, weekly totals) |
+| `/admin/platform` | Platform marketplace overview |
+| `/admin/tenants` | Tenant monitoring |
+| `/admin/part-timers` | Part-timer CRUD and review |
+| `/admin/employers` | Employer registration and tenant review |
+| `/admin/jobs` | Marketplace job monitoring |
+| `/admin/offers` | Offer batch monitoring |
+| `/admin/whatsapp` | WhatsApp outbound/inbound logs and config hint |
+| `/admin/media` | Portfolio/job/logo media monitoring |
 | `/admin/events` | Work events + QR generation |
 | `/admin/events/[id]/qr` | Printable QR page for scanning |
 | `/admin/attendance` | Attendance logs + manual adjust |
@@ -149,12 +194,15 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/admin/reports/weekly-payroll` | Weekly payroll report + CSV |
 | `/admin/reports/exceptions` | Items needing admin review |
 | `/admin/settings` | System info |
-| `/scan/[token]` | Public QR landing — staff clock in/out |
+| `/scan/[token]` | Public QR landing — part-timer clock in/out |
 | `/api/health` | Liveness + DB probe |
 | `/api/reports/weekly-payroll.csv` | CSV export (admin only) |
 | `/api/reports/daily.csv` | CSV export (admin only) |
-| `/api/public/register/send-otp` | Send WhatsApp OTP for staff self-registration |
-| `/api/public/register/verify` | Verify OTP and create pending-review staff |
+| `/api/public/otp/send` | Send WhatsApp OTP for part-timer or employer registration |
+| `/api/public/otp/verify` | Verify OTP without creating a profile |
+| `/api/public/register/part-timer` | Verify OTP and create pending-review part-timer |
+| `/api/public/register/employer` | Verify OTP and create pending-review employer tenant |
+| `/api/webhooks/baileys/inbound` | Signed Baileys inbound webhook for offer replies/statuses |
 
 ---
 

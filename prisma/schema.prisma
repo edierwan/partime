@@ -14,21 +14,231 @@ model AdminUser {
   email        String   @unique
   passwordHash String
   name         String?
+  platformRole String   @default("PLATFORM_ADMIN")
   createdAt    DateTime @default(now())
 
-  adjustments  AttendanceAdjustmentAudit[]
+  adjustments        AttendanceAdjustmentAudit[]
+  tenantMemberships  TenantMembership[]
+  approvedPartTimers TenantPartTimerApproval[] @relation("TenantPartTimerApprovedBy")
 }
 
 enum StaffGender {
   LELAKI
   PEREMPUAN
   UNKNOWN
+  TIDAK_DINYATAKAN
 }
 
 enum StaffApprovalStatus {
   APPROVED
   PENDING_REVIEW
   REJECTED
+}
+
+enum PartTimerStatus {
+  PENDING_OTP
+  PENDING_REVIEW
+  ACTIVE
+  INACTIVE
+  REJECTED
+  SUSPENDED
+}
+
+enum TenantStatus {
+  PENDING_REVIEW
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+enum EmployerRegistrationStatus {
+  PENDING_OTP
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SkillExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  EXPERIENCED
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum JobType {
+  EVENT
+  SHIFT
+  CAMPAIGN
+  GIG
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  OFFERING
+  FULL
+  COMPLETED
+  CANCELLED
+  CLOSED
+}
+
+enum JobPayType {
+  HOURLY
+  DAILY
+  FIXED
+}
+
+enum PayoutStatus {
+  UNPAID
+  READY
+  PAID_MANUAL
+  PAYMENT_GATEWAY_PENDING
+}
+
+enum JobPaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID_MANUAL
+  PAYMENT_GATEWAY_PENDING
+}
+
+enum JobInterestStatus {
+  INTERESTED
+  WITHDRAWN
+  SHORTLISTED
+  CONFIRMED
+  REJECTED
+}
+
+enum JobOfferBatchStatus {
+  DRAFT
+  OFFER_SENT
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum JobOfferStatus {
+  DRAFT
+  OFFER_SENT
+  DELIVERED
+  INTERESTED
+  NOT_INTERESTED
+  NO_RESPONSE
+  SHORTLISTED
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+  FAILED
+}
+
+enum WhatsAppMessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  RECEIVED
+  FAILED
+}
+
+enum OfferReplyIntent {
+  INTERESTED
+  NOT_INTERESTED
+  INVALID
+}
+
+enum TenantPartTimerApprovalStatus {
+  PENDING
+  APPROVED
+  BLOCKED
+}
+
+model Tenant {
+  id             String       @id @default(cuid())
+  name           String
+  slug           String       @unique
+  registrationNo String?
+  businessType   String?
+  phoneE164      String
+  email          String
+  addressLine1   String?
+  addressLine2   String?
+  city           String?
+  state          String?
+  postcode       String?
+  country        String       @default("Malaysia")
+  logoUrl        String?
+  logoKey        String?
+  status         TenantStatus @default(PENDING_REVIEW)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  memberships           TenantMembership[]
+  employerRegistrations EmployerRegistration[]
+  events                WorkEvent[]
+  sessions              AttendanceSession[]
+  scanLogs              ScanLog[]
+  partTimerApprovals    TenantPartTimerApproval[]
+  jobOffers             JobOffer[]
+  whatsappOutbound      WhatsAppOutboundMessage[]
+  whatsappInbound       WhatsAppInboundMessage[]
+  auditLogs             AuditLog[]
+
+  @@index([status])
+  @@index([name])
+}
+
+model TenantMembership {
+  id          String     @id @default(cuid())
+  tenant      Tenant     @relation(fields: [tenantId], references: [id])
+  tenantId    String
+  adminUser   AdminUser  @relation(fields: [adminUserId], references: [id])
+  adminUserId String
+  role        TenantRole @default(VIEWER)
+  createdAt   DateTime   @default(now())
+
+  @@unique([tenantId, adminUserId])
+  @@index([adminUserId])
+}
+
+model EmployerRegistration {
+  id                     String                     @id @default(cuid())
+  tenant                 Tenant?                    @relation(fields: [tenantId], references: [id])
+  tenantId               String?
+  companyName            String
+  contactPersonName      String
+  contactPhoneE164       String
+  contactEmail           String
+  businessRegistrationNo String?
+  industry               String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  state                  String?
+  postcode               String?
+  country                String                     @default("Malaysia")
+  expectedHiringNeeds    Json?
+  notes                  String?
+  status                 EmployerRegistrationStatus @default(PENDING_REVIEW)
+  otpVerifiedAt          DateTime?
+  rejectionReason        String?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  @@index([status])
+  @@index([contactPhoneE164])
+  @@index([contactEmail])
 }
 
 model Staff {
@@ -38,7 +248,10 @@ model Staff {
   fullName           String
   icNumberNormalized String?             @unique
   icNumberDisplay    String?
-  gender             StaffGender         @default(UNKNOWN)
+  gender             StaffGender         @default(TIDAK_DINYATAKAN)
+  nationality        String              @default("Malaysia")
+  otherNationality   String?
+  passportNumber     String?
   phoneE164          String              @unique @map("phone")
   phoneDisplay       String?
   email              String?             @unique
@@ -49,6 +262,15 @@ model Staff {
   profileImageUrl    String?
   profileImageKey    String?
   approvalStatus     StaffApprovalStatus @default(APPROVED)
+  status             PartTimerStatus     @default(ACTIVE)
+  preferredLocation  String?
+  availability       Json?
+  state              String?
+  city               String?
+  bio                String?
+  experienceSummary  String?
+  expectedRateCents  Int?
+  publicProfile      Boolean             @default(false)
   active             Boolean             @default(true)
   notes              String?
   createdAt          DateTime            @default(now())
@@ -56,30 +278,318 @@ model Staff {
 
   sessions           AttendanceSession[]
   scanLogs           ScanLog[]
+  skills             PartTimerSkill[]
+  tenantApprovals    TenantPartTimerApproval[]
+  portfolioMedia     PartTimerPortfolioMedia[]
+  jobInterests       JobInterest[]
+  offerRecipients    JobOfferRecipient[]
+  auditLogs          AuditLog[]
 
+  @@index([aliasPanggilan])
   @@index([fullName])
   @@index([active])
   @@index([approvalStatus])
+  @@index([status])
+  @@index([nationality])
+  @@index([state, city])
+}
+
+model SkillCategory {
+  id        String   @id @default(cuid())
+  nameMs    String
+  nameId    String
+  nameEn    String
+  slug      String   @unique
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills Skill[]
+
+  @@index([active, sortOrder])
+}
+
+model Skill {
+  id         String        @id @default(cuid())
+  category   SkillCategory @relation(fields: [categoryId], references: [id])
+  categoryId String
+  nameMs     String
+  nameId     String
+  nameEn     String
+  slug       String        @unique
+  active     Boolean       @default(true)
+  sortOrder  Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  partTimers PartTimerSkill[]
+  jobs       JobSkill[]
+
+  @@index([categoryId, active, sortOrder])
+}
+
+model PartTimerSkill {
+  id              String                @id @default(cuid())
+  partTimer       Staff                 @relation(fields: [partTimerId], references: [id])
+  partTimerId     String
+  skill           Skill                 @relation(fields: [skillId], references: [id])
+  skillId         String
+  experienceLevel SkillExperienceLevel?
+  notes           String?
+
+  @@unique([partTimerId, skillId])
+  @@index([skillId])
+}
+
+model TenantPartTimerApproval {
+  id           String                        @id @default(cuid())
+  tenant       Tenant                        @relation(fields: [tenantId], references: [id])
+  tenantId     String
+  partTimer    Staff                         @relation(fields: [partTimerId], references: [id])
+  partTimerId  String
+  status       TenantPartTimerApprovalStatus @default(PENDING)
+  approvedAt   DateTime?
+  approvedBy   AdminUser?                    @relation("TenantPartTimerApprovedBy", fields: [approvedById], references: [id])
+  approvedById String?
+  notes        String?
+  createdAt    DateTime                      @default(now())
+  updatedAt    DateTime                      @updatedAt
+
+  @@unique([tenantId, partTimerId])
+  @@index([partTimerId, status])
+  @@index([tenantId, status])
 }
 
 model WorkEvent {
-  id               String   @id @default(cuid())
+  id               String           @id @default(cuid())
+  tenant           Tenant           @relation(fields: [tenantId], references: [id])
+  tenantId         String
   name             String
+  slug             String?          @unique
+  summary          String?
+  description      String?
+  category         String?
+  jobType          JobType          @default(EVENT)
+  jobStatus        JobStatus        @default(DRAFT)
   location         String
+  state            String?
+  city             String?
+  address          String?
   workDate         DateTime
-  defaultRateCents Int      @default(0)
-  autoBreakRule    Boolean  @default(true)
-  active           Boolean  @default(true)
-  scanToken        String   @unique
+  endDate          DateTime?
+  startTime        String?
+  endTime          String?
+  headcount        Int              @default(1)
+  filledCount      Int              @default(0)
+  payType          JobPayType       @default(HOURLY)
+  defaultRateCents Int              @default(0)
+  minRateCents     Int?
+  maxRateCents     Int?
+  publicVisible    Boolean          @default(false)
+  applyBy          DateTime?
+  payoutStatus     PayoutStatus     @default(UNPAID)
+  paymentStatus    JobPaymentStatus @default(NOT_REQUIRED)
+  coverImageUrl    String?
+  coverImageKey    String?
+  autoBreakRule    Boolean          @default(true)
+  active           Boolean          @default(true)
+  scanToken        String           @unique
   notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   sessions         AttendanceSession[]
   scanLogs         ScanLog[]
+  skills           JobSkill[]
+  media            JobMedia[]
+  interests        JobInterest[]
+  offers           JobOffer[]
+  auditLogs        AuditLog[]
 
+  @@index([tenantId])
   @@index([workDate])
   @@index([active])
+  @@index([jobStatus, publicVisible, workDate])
+  @@index([state, city])
+}
+
+model JobSkill {
+  jobId     String
+  skillId   String
+  job       WorkEvent @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill     Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@id([jobId, skillId])
+  @@index([skillId])
+}
+
+model JobMedia {
+  id        String    @id @default(cuid())
+  jobId     String
+  job       WorkEvent @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  mediaType MediaType
+  url       String
+  key       String?
+  filename  String?
+  mimeType  String?
+  sizeBytes Int?
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  @@index([jobId])
+}
+
+model PartTimerPortfolioMedia {
+  id          String    @id @default(cuid())
+  partTimerId String
+  partTimer   Staff     @relation(fields: [partTimerId], references: [id], onDelete: Cascade)
+  mediaType   MediaType
+  title       String?
+  description String?
+  url         String
+  key         String?
+  filename    String?
+  mimeType    String?
+  sizeBytes   Int?
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  @@index([partTimerId])
+}
+
+model JobInterest {
+  id          String            @id @default(cuid())
+  jobId       String
+  partTimerId String
+  job         WorkEvent         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  partTimer   Staff             @relation(fields: [partTimerId], references: [id], onDelete: Cascade)
+  status      JobInterestStatus @default(INTERESTED)
+  note        String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([jobId, partTimerId])
+  @@index([partTimerId])
+  @@index([status])
+}
+
+model JobOffer {
+  id               String              @id @default(cuid())
+  tenantId         String
+  jobId            String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  job              WorkEvent           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title            String
+  message          String
+  status           JobOfferBatchStatus @default(DRAFT)
+  expiresAt        DateTime?
+  sentAt           DateTime?
+  createdByEmail   String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  recipients       JobOfferRecipient[]
+  outboundMessages WhatsAppOutboundMessage[]
+
+  @@index([tenantId])
+  @@index([jobId])
+  @@index([status])
+}
+
+model JobOfferRecipient {
+  id               String                    @id @default(cuid())
+  offerId          String
+  partTimerId      String
+  offer            JobOffer                  @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  partTimer        Staff                     @relation(fields: [partTimerId], references: [id], onDelete: Cascade)
+  status           JobOfferStatus            @default(DRAFT)
+  replyText        String?
+  replyReceivedAt  DateTime?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  confirmedAt      DateTime?
+  cancelledAt      DateTime?
+  lastMessageId    String?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  outboundMessages WhatsAppOutboundMessage[]
+  inboundMessages  WhatsAppInboundMessage[]
+
+  @@unique([offerId, partTimerId])
+  @@index([partTimerId])
+  @@index([status])
+}
+
+model WhatsAppOutboundMessage {
+  id                String                @id @default(cuid())
+  tenantId          String?
+  offerId           String?
+  offerRecipientId  String?
+  tenant            Tenant?               @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  offer             JobOffer?             @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  offerRecipient    JobOfferRecipient?    @relation(fields: [offerRecipientId], references: [id], onDelete: SetNull)
+  provider          String                @default("baileys")
+  providerTenant    String                @default("partime")
+  providerMessageId String?
+  toPhone           String
+  fromPhone         String?
+  messageType       String                @default("text")
+  body              String
+  status            WhatsAppMessageStatus @default(QUEUED)
+  errorCode         String?
+  errorMessage      String?
+  payload           Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([tenantId, createdAt])
+  @@index([providerMessageId])
+  @@index([offerRecipientId])
+}
+
+model WhatsAppInboundMessage {
+  id                String             @id @default(cuid())
+  tenantId          String?
+  offerRecipientId  String?
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  offerRecipient    JobOfferRecipient? @relation(fields: [offerRecipientId], references: [id], onDelete: SetNull)
+  provider          String             @default("baileys")
+  providerTenant    String             @default("partime")
+  eventType         String
+  providerMessageId String?
+  fromPhone         String?
+  toPhone           String?
+  body              String?
+  interpretedReply  OfferReplyIntent?
+  payload           Json
+  receivedAt        DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+
+  @@index([tenantId, receivedAt])
+  @@index([providerMessageId])
+  @@index([offerRecipientId])
+  @@index([eventType])
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  tenantId    String?
+  partTimerId String?
+  jobId       String?
+  tenant      Tenant?    @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  partTimer   Staff?     @relation(fields: [partTimerId], references: [id], onDelete: SetNull)
+  job         WorkEvent? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  actorEmail  String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([actorEmail])
 }
 
 enum AttendanceStatus {
@@ -92,6 +602,8 @@ enum AttendanceStatus {
 
 model AttendanceSession {
   id                       String           @id @default(cuid())
+  tenant                   Tenant           @relation(fields: [tenantId], references: [id])
+  tenantId                 String
   event                    WorkEvent        @relation(fields: [eventId], references: [id])
   eventId                  String
   staff                    Staff            @relation(fields: [staffId], references: [id])
@@ -113,6 +625,7 @@ model AttendanceSession {
   audits                   AttendanceAdjustmentAudit[]
 
   @@unique([eventId, staffId, workDate])
+  @@index([tenantId])
   @@index([workDate])
   @@index([status])
 }
@@ -127,6 +640,8 @@ enum ScanAction {
 
 model ScanLog {
   id        String     @id @default(cuid())
+  tenant    Tenant?    @relation(fields: [tenantId], references: [id])
+  tenantId  String?
   event     WorkEvent? @relation(fields: [eventId], references: [id])
   eventId   String?
   staff     Staff?     @relation(fields: [staffId], references: [id])
@@ -140,10 +655,15 @@ model ScanLog {
   createdAt DateTime   @default(now())
 
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 enum OtpPurpose {
   STAFF_REGISTER
+  PART_TIMER_REGISTER
+  EMPLOYER_REGISTER
+  STAFF_LOGIN
+  PART_TIMER_LOGIN
 }
 
 model StaffOtp {
