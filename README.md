@@ -131,9 +131,8 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
       - `BAILEYS_API_BASE_URL`, `BAILEYS_SESSION_ID`, `BAILEYS_API_KEY` for WhatsApp OTP and offers
       - optional `BAILEYS_TENANT` / `BAILEYS_PROVIDER_TENANT` for logical provider tagging in Partime logs
       - `BAILEYS_WEBHOOK_SECRET` for inbound Baileys offer replies
-8. After the first successful deploy, exec into the container once:
+8. Startup now runs `prisma migrate deploy` automatically before `next start`, so committed migrations are applied on each deploy. After the first successful deploy, exec into the container once only for seed data:
    ```bash
-   npm run prisma:migrate    # prisma migrate deploy (applies committed migrations)
    npm run prisma:seed       # creates the admin user
    ```
 9. Log in, change the admin password (re-seed with a new password and remove seed env vars).
