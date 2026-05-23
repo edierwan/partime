@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0 -p 3000",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build && npm run prepare:standalone",
+    "prepare:standalone": "node scripts/prepare-standalone.mjs",
     "start": "npm run prisma:migrate && HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js",
     "lint": "eslint .",
     "whatsapp:test": "tsx scripts/whatsapp-test.ts",
