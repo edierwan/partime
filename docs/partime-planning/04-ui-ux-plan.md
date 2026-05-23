@@ -47,8 +47,18 @@ Visual reference: the attached mockup screenshots. Match the look closely.
 - `/register` is a language-aware chooser for Part-timer and Employer.
 - `/register/part-timer` uses profile, contact/OTP, skills, bank, and consent sections.
 - `/register/employer` uses company, contact/OTP, and hiring-needs sections.
+- Employer logo selection shows an immediate image preview before submit.
+- Malaysia address inputs use dependent `Negeri -> Bandar -> Poskod` controls with postcode autocomplete and exact-match auto-fill.
+- If a city is missing from the seeded list, the user can still type a custom city value.
 - IC field shows derived jantina helper text for Malaysian part-timers.
 - WhatsApp OTP step appears inline after form validation succeeds.
+
+## Location UX
+- State select always shows Malaysia states in canonical order.
+- City input stays disabled until a state is selected.
+- Typing a 5-digit postcode attempts to resolve the selected city/state automatically.
+- Unknown but well-formed postcodes show a non-blocking warning instead of a hard failure.
+- Public jobs search uses state and city filters in addition to the existing keyword/date/category filters.
 
 ## Tables
 - Sticky header on long tables.

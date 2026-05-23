@@ -22,7 +22,7 @@ export const MALAYSIA_STATES = [
   'Melaka',
   'Negeri Sembilan',
   'Pahang',
-  'Penang',
+  'Pulau Pinang',
   'Perak',
   'Perlis',
   'Putrajaya',
@@ -106,7 +106,9 @@ export function formatJobRate(job: { defaultRateCents: number; minRateCents: num
 export function publicJobWhere(searchParams: {
   q?: string;
   location?: string;
+  stateCode?: string;
   state?: string;
+  city?: string;
   category?: string;
   skill?: string;
   date?: string;
@@ -116,7 +118,9 @@ export function publicJobWhere(searchParams: {
 }) {
   const q = (searchParams.q || '').trim();
   const location = (searchParams.location || '').trim();
+  const stateCode = (searchParams.stateCode || '').trim().toUpperCase();
   const state = (searchParams.state || '').trim();
+  const city = (searchParams.city || '').trim();
   const category = (searchParams.category || '').trim();
   const skill = (searchParams.skill || '').trim();
   const date = (searchParams.date || '').trim();
@@ -144,7 +148,9 @@ export function publicJobWhere(searchParams: {
       { state: { contains: location, mode: 'insensitive' } },
     ];
   }
+  if (stateCode) where.stateCode = stateCode;
   if (state) where.state = state;
+  if (city) where.city = { contains: city, mode: 'insensitive' };
   if (category) where.category = category;
   if (skill) {
     where.skills = {
@@ -210,9 +216,12 @@ export async function createMarketplaceJob(data: {
   toolsNeeded?: string | null;
   category?: string | null;
   location: string;
+  stateCode?: string | null;
   state?: string | null;
   city?: string | null;
   address?: string | null;
+  addressLine2?: string | null;
+  postcode?: string | null;
   workDate: Date;
   endDate?: Date | null;
   startTime?: string | null;
@@ -240,9 +249,12 @@ export async function createMarketplaceJob(data: {
       toolsNeeded: data.toolsNeeded || null,
       category: data.category || null,
       location: data.location,
+      stateCode: data.stateCode || null,
       state: data.state || null,
       city: data.city || null,
       address: data.address || null,
+      addressLine2: data.addressLine2 || null,
+      postcode: data.postcode || null,
       workDate: data.workDate,
       endDate: data.endDate || null,
       startTime: data.startTime || null,

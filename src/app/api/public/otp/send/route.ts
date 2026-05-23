@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { getBaileysGatewayDiagnostics } from '@/lib/baileys/client';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
 import { generateOtpCode, hashOtpCode, otpExpiresAt, OTP_MAX_ATTEMPTS, OTP_MAX_SENDS_PER_IP, OTP_MAX_SENDS_PER_PHONE } from '@/lib/otp';
 import { sendWhatsAppOtp } from '@/lib/whatsapp';
@@ -63,16 +64,50 @@ export async function POST(req: Request) {
 
   const delivery = await sendWhatsAppOtp({ toPhoneE164: phoneE164, code });
   if (!delivery.ok) {
+    const diagnostics = getBaileysGatewayDiagnostics();
+    const diagnosticPayload = {
+      configured: diagnostics.configured,
+      baseUrl: diagnostics.baseUrl,
+      sessionId: diagnostics.sessionId,
+      providerTenant: diagnostics.providerTenant,
+      authHeader: diagnostics.authHeader,
+      sendPath: diagnostics.sendPath,
+      resolvedUrl: diagnostics.resolvedUrl,
+      hasApiKey: diagnostics.hasApiKey,
+    };
     await prisma.staffOtp.update({
       where: { id: otp.id },
-      data: { sendStatus: 'FAILED', sendError: delivery.detail || delivery.error || 'OTP delivery failed' },
+      data: {
+        sendStatus: 'FAILED',
+        sendError: delivery.detail || delivery.error || 'OTP delivery failed',
+        payloadJson: {
+          purpose,
+          error: delivery.error || null,
+          detail: delivery.detail || null,
+          providerTenant: delivery.providerTenant || diagnostics.providerTenant,
+          sessionId: delivery.sessionId || diagnostics.sessionId,
+          requestUrl: delivery.requestUrl || diagnostics.resolvedUrl,
+          statusCode: delivery.statusCode || null,
+          diagnostics: diagnosticPayload,
+        },
+      },
     });
     return NextResponse.json({ ok: false, message: 'We could not send the WhatsApp OTP right now. Please try again shortly.' }, { status: 503 });
   }
 
   await prisma.staffOtp.update({
     where: { id: otp.id },
-    data: { sendStatus: 'SENT', sendError: null, payloadJson: { purpose, messageId: delivery.messageId || null } },
+    data: {
+      sendStatus: 'SENT',
+      sendError: null,
+      payloadJson: {
+        purpose,
+        messageId: delivery.messageId || null,
+        providerTenant: delivery.providerTenant || null,
+        sessionId: delivery.sessionId || null,
+        requestUrl: delivery.requestUrl || null,
+      },
+    },
   });
 
   return NextResponse.json({ ok: true, message: `OTP sent to WhatsApp ending ${phoneE164.slice(-4)}. The code expires in 5 minutes.` });

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { requireSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { defaultOfferMessage } from '@/lib/offer-messages';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { defaultWhatsAppTenant, sendWhatsAppMessage } from '@/lib/whatsapp';
 
 export async function sendJobOffer(formData: FormData) {
   const session = await requireSession();
@@ -22,7 +22,7 @@ export async function sendJobOffer(formData: FormData) {
 
   const title = String(formData.get('title') || '').trim() || `Offer: ${job.name}`;
   const messageTemplate = String(formData.get('message') || '').trim() || defaultOfferMessage(job);
-  const providerTenant = process.env.BAILEYS_TENANT || 'partime';
+  const providerTenant = defaultWhatsAppTenant();
 
   const offer = await prisma.jobOffer.create({
     data: {

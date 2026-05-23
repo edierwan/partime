@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
+import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
 import { AVAILABILITY_OPTIONS, MALAYSIA_BANK_OPTIONS, NATIONALITY_OPTIONS, displayGender, formatIcNumber, genderFromIc, normalizeIcNumber } from '@/lib/staff';
 import { PublicLocale, publicDict } from '@/lib/public-i18n';
@@ -170,7 +171,33 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
             <Input name="phone" label={t.mobile} placeholder="e.g. +60 12-345 6789" error={fieldErrors.phone} inputMode="tel" />
             <Input name="email" label={`${t.email} (Optional)`} placeholder="e.g. nur@example.com" error={fieldErrors.email} inputMode="email" />
           </div>
-          <Input name="preferredLocation" label={t.preferredLocation} placeholder="e.g. Kuala Lumpur, Selangor" error={fieldErrors.preferredLocation} />
+          <MalaysiaAddressFields
+            errors={fieldErrors}
+            footerError={fieldErrors.preferredLocation}
+            names={{
+              stateCode: 'stateCode',
+              stateName: 'state',
+              cityName: 'city',
+              postcode: 'postcode',
+              country: 'country',
+              preferredLocation: 'preferredLocation',
+            }}
+            labels={{
+              state: t.state,
+              city: t.city,
+              postcode: t.postcode,
+              selectState: t.selectState,
+              cityPlaceholder: t.cityPlaceholder,
+              postcodePlaceholder: t.postcodePlaceholder,
+              customCityHint: t.customCityHint,
+            }}
+            required={{ state: true, city: true, postcode: true }}
+            initialValue={{ country: 'Malaysia' }}
+            showAddressLine1={false}
+            showAddressLine2={false}
+            showCountry={false}
+            helperText={t.preferredLocation}
+          />
         </Section>
 
         <Section title="3. Work Skills">

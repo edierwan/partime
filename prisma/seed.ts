@@ -1,6 +1,7 @@
 import { PrismaClient, AttendanceStatus } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
+import { seedMalaysiaLocations } from './seed-locations-my';
 
 const prisma = new PrismaClient();
 
@@ -57,6 +58,9 @@ async function main() {
       status: 'ACTIVE',
     },
   });
+
+  await seedMalaysiaLocations(prisma);
+  console.log('= Malaysia location master data seeded.');
 
   for (const [categoryIndex, category] of skillSeed.entries()) {
     const savedCategory = await prisma.skillCategory.upsert({

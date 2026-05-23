@@ -21,6 +21,7 @@ export async function POST(req: Request) {
     requireIdentity: true,
     requireSkills: true,
     requireConsent: true,
+    requireStructuredLocation: true,
   });
   if (!parsed.ok) return NextResponse.json({ ok: false, message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
 
@@ -74,6 +75,10 @@ export async function POST(req: Request) {
       phoneE164: data.phoneE164,
       phoneDisplay: data.phoneDisplay,
       email: data.email,
+      stateCode: data.stateCode,
+      state: data.state,
+      city: data.city,
+      postcode: data.postcode,
       bankCode: data.bankCode,
       bankName: data.bankName,
       customBankName: data.customBankName,

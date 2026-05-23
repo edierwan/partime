@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
-import { sendWhatsAppMessage } from '@/lib/whatsapp';
+import { defaultWhatsAppTenant, sendWhatsAppMessage } from '@/lib/whatsapp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -122,6 +122,7 @@ async function handleMessageStatus(event: WebhookEvent, eventType: string) {
   if (!messageId || !status) return { handled: false };
   const outbound = await prisma.whatsAppOutboundMessage.findFirst({ where: { providerMessageId: messageId }, include: { offerRecipient: true } });
   if (!outbound) return { handled: false };
+  const providerTenant = defaultWhatsAppTenant();
   await prisma.whatsAppOutboundMessage.update({ where: { id: outbound.id }, data: { status, payload: payload as object } });
   if (outbound.offerRecipientId && status === 'DELIVERED') {
     await prisma.jobOfferRecipient.update({ where: { id: outbound.offerRecipientId }, data: { status: 'DELIVERED', deliveredAt: new Date() } });
@@ -130,11 +131,11 @@ async function handleMessageStatus(event: WebhookEvent, eventType: string) {
     data: {
       tenantId: outbound.tenantId,
       offerRecipientId: outbound.offerRecipientId,
-      providerTenant: event.sessionId || process.env.BAILEYS_TENANT || 'partime',
+      providerTenant,
       eventType,
       providerMessageId: messageId,
       fromPhone: payload?.remoteJid || null,
-      payload: { ...payload, normalizedStatus: status },
+      payload: { ...payload, normalizedStatus: status, sessionId: event.sessionId || null },
     },
   });
   return { handled: true };
@@ -145,7 +146,7 @@ async function handleInboundMessage(event: WebhookEvent, eventType: string) {
   const fromPhone = phoneFromPayload(payload);
   const body = textFromPayload(payload);
   const providerMessageId = messageIdFromPayload(payload);
-  const providerTenant = event.sessionId || process.env.BAILEYS_TENANT || 'partime';
+  const providerTenant = defaultWhatsAppTenant();
   const intent = replyIntent(body);
   const partTimer = fromPhone ? await prisma.staff.findUnique({ where: { phoneE164: fromPhone } }) : null;
   const recipient = partTimer ? await prisma.jobOfferRecipient.findFirst({
@@ -164,7 +165,7 @@ async function handleInboundMessage(event: WebhookEvent, eventType: string) {
       fromPhone,
       body,
       interpretedReply: intent,
-      payload: event as object,
+      payload: { ...(event as object), sessionId: event.sessionId || null },
     },
   });
 

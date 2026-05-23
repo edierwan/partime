@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
 import { PublicLocale, publicDict } from '@/lib/public-i18n';
 
@@ -19,6 +20,13 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (logoPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(logoPreviewUrl);
+    };
+  }, [logoPreviewUrl]);
 
   async function sendOtp() {
     if (!formRef.current) return;
@@ -84,11 +92,39 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
       <form ref={formRef} encType="multipart/form-data" className="card card-pad space-y-7">
         <Section title="1. Company Details">
           <Input name="companyName" label={t.companyName} error={fieldErrors.companyName} />
-          <div>
-            <label className="label">Company Logo (Optional)</label>
-            <input className="input px-3 py-2" name="companyLogo" type="file" accept="image/jpeg,image/png,image/webp" />
-            <p className="mt-1 text-xs text-ink-500">JPG, PNG, WEBP up to 2MB.</p>
-            <FieldError error={fieldErrors.companyLogo} />
+          <div className="flex items-start gap-4 rounded-2xl border border-ink-200 bg-ink-50/70 p-4">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-ink-200 bg-white">
+              {logoPreviewUrl ? (
+                <img src={logoPreviewUrl} alt="Company logo preview" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-sm font-semibold text-ink-400">Logo</span>
+              )}
+            </div>
+            <div className="flex-1">
+              <label className="label">Company Logo (Optional)</label>
+              <input
+                className="input px-3 py-2"
+                name="companyLogo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const next = event.target.files?.[0];
+                  if (!next) {
+                    setLogoPreviewUrl((current) => {
+                      if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+                      return null;
+                    });
+                    return;
+                  }
+                  setLogoPreviewUrl((current) => {
+                    if (current?.startsWith('blob:')) URL.revokeObjectURL(current);
+                    return URL.createObjectURL(next);
+                  });
+                }}
+              />
+              <p className="mt-1 text-xs text-ink-500">JPG, PNG, WEBP up to 2MB.</p>
+              <FieldError error={fieldErrors.companyLogo} />
+            </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input name="businessRegistrationNo" label={`${t.registrationNo} (Optional)`} error={fieldErrors.businessRegistrationNo} />
@@ -101,14 +137,32 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
               <FieldError error={fieldErrors.industry} />
             </div>
           </div>
-          <Input name="addressLine1" label={t.address} error={fieldErrors.addressLine1} />
-          <Input name="addressLine2" label="Address Line 2 (Optional)" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Input name="city" label={t.city} error={fieldErrors.city} />
-            <Input name="state" label={t.state} error={fieldErrors.state} />
-            <Input name="postcode" label={t.postcode} error={fieldErrors.postcode} />
-          </div>
-          <Input name="country" label={t.country} defaultValue="Malaysia" error={fieldErrors.country} />
+          <MalaysiaAddressFields
+            errors={fieldErrors}
+            names={{
+              addressLine1: 'addressLine1',
+              addressLine2: 'addressLine2',
+              stateCode: 'stateCode',
+              stateName: 'state',
+              cityName: 'city',
+              postcode: 'postcode',
+              country: 'country',
+            }}
+            labels={{
+              addressLine1: t.address,
+              addressLine2: `${t.addressLine2} (Optional)`,
+              state: t.state,
+              city: t.city,
+              postcode: t.postcode,
+              country: t.country,
+              selectState: t.selectState,
+              cityPlaceholder: t.cityPlaceholder,
+              postcodePlaceholder: t.postcodePlaceholder,
+              customCityHint: t.customCityHint,
+            }}
+            required={{ addressLine1: true, state: true, city: true, postcode: true }}
+            initialValue={{ country: 'Malaysia' }}
+          />
         </Section>
 
         <Section title="2. Contact Person">

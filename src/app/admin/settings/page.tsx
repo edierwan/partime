@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getSession } from '@/lib/auth';
 import { ALLOW_PENDING_CLOCK_IN_KEY, getBooleanAppSetting } from '@/lib/app-settings';
 import { saveScanSettings } from './actions';
@@ -49,6 +50,14 @@ export default async function SettingsPage() {
       <div className="card card-pad space-y-2">
         <div className="font-semibold">About Partime</div>
         <div className="text-sm text-ink-500">Standalone part-time attendance + weekly payroll system. No external payroll, bank, or finance integration.</div>
+      </div>
+
+      <div className="card card-pad flex items-center justify-between gap-4">
+        <div>
+          <div className="font-semibold">Malaysia location master data</div>
+          <div className="text-sm text-ink-500">Review the seeded states, cities, and postcodes used by dependent dropdowns and postcode autocomplete.</div>
+        </div>
+        <Link href="/admin/settings/locations" className="btn-ghost">View locations</Link>
       </div>
     </div>
   );

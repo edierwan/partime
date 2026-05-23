@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { hashOtpCode } from '@/lib/otp';
 import { normalizeMalaysiaPhone } from '@/lib/staff';
+import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
 import { uniqueTenantSlug } from '@/lib/tenant';
 import { saveEmployerLogo } from '@/lib/uploads';
 
@@ -20,9 +21,10 @@ const schema = z.object({
   industry: z.string().trim().min(1, 'Industry is required'),
   addressLine1: z.string().trim().min(1, 'Address is required'),
   addressLine2: z.string().trim().optional().default(''),
+  stateCode: z.string().trim().optional().default(''),
   city: z.string().trim().min(1, 'City is required'),
   state: z.string().trim().min(1, 'State is required'),
-  postcode: z.string().trim().min(3, 'Postcode is required'),
+  postcode: z.string().trim().min(5, 'Postcode is required'),
   country: z.string().trim().optional().default('Malaysia'),
   notes: z.string().trim().optional().default(''),
 });
@@ -45,6 +47,21 @@ export async function POST(req: Request) {
   }
 
   const value = parsed.data;
+  const normalizedLocation = await validateMalaysiaLocation({
+    stateCode: value.stateCode,
+    stateName: value.state,
+    cityName: value.city,
+    postcode: value.postcode,
+    country: value.country,
+    requireState: true,
+    requireCity: true,
+    requirePostcode: true,
+    allowCustomCity: true,
+  });
+  if (!normalizedLocation.ok) {
+    return NextResponse.json({ ok: false, message: 'Invalid input', fieldErrors: normalizedLocation.fieldErrors }, { status: 400 });
+  }
+
   const contactPhoneE164 = normalizeMalaysiaPhone(value.contactPhone);
   if (!contactPhoneE164) {
     return NextResponse.json({ ok: false, message: 'Enter a valid Malaysia mobile number.', fieldErrors: { contactPhone: 'Enter a valid Malaysia mobile number.' } }, { status: 400 });
@@ -78,10 +95,11 @@ export async function POST(req: Request) {
       email: value.contactEmail.toLowerCase(),
       addressLine1: value.addressLine1,
       addressLine2: value.addressLine2 || null,
-      city: value.city,
-      state: value.state,
-      postcode: value.postcode,
-      country: value.country || 'Malaysia',
+      city: normalizedLocation.data.cityName,
+      state: normalizedLocation.data.stateName,
+      stateCode: normalizedLocation.data.stateCode,
+      postcode: normalizedLocation.data.postcode,
+      country: normalizedLocation.data.country,
       status: 'PENDING_REVIEW',
     },
     select: { id: true },
@@ -109,10 +127,11 @@ export async function POST(req: Request) {
       industry: value.industry,
       addressLine1: value.addressLine1,
       addressLine2: value.addressLine2 || null,
-      city: value.city,
-      state: value.state,
-      postcode: value.postcode,
-      country: value.country || 'Malaysia',
+      city: normalizedLocation.data.cityName,
+      state: normalizedLocation.data.stateName,
+      stateCode: normalizedLocation.data.stateCode,
+      postcode: normalizedLocation.data.postcode,
+      country: normalizedLocation.data.country,
       expectedHiringNeeds: hiringNeeds,
       notes: value.notes || null,
       status: 'PENDING_REVIEW',

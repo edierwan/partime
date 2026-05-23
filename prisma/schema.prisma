@@ -176,6 +176,7 @@ model Tenant {
   addressLine2   String?
   city           String?
   state          String?
+  stateCode      String?
   postcode       String?
   country        String       @default("Malaysia")
   logoUrl        String?
@@ -226,6 +227,7 @@ model EmployerRegistration {
   addressLine2           String?
   city                   String?
   state                  String?
+  stateCode              String?
   postcode               String?
   country                String                     @default("Malaysia")
   expectedHiringNeeds    Json?
@@ -239,6 +241,55 @@ model EmployerRegistration {
   @@index([status])
   @@index([contactPhoneE164])
   @@index([contactEmail])
+}
+
+model MalaysiaState {
+  id        String            @id @default(cuid())
+  code      String            @unique
+  name      String
+  sortOrder Int               @default(0)
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  cities    MalaysiaCity[]
+  postcodes MalaysiaPostcode[]
+
+  @@index([active, sortOrder])
+}
+
+model MalaysiaCity {
+  id             String            @id @default(cuid())
+  stateId        String
+  state          MalaysiaState     @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  name           String
+  normalizedName String
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  postcodes      MalaysiaPostcode[]
+
+  @@unique([stateId, normalizedName])
+  @@index([stateId])
+  @@index([normalizedName])
+}
+
+model MalaysiaPostcode {
+  id        String        @id @default(cuid())
+  stateId   String
+  cityId    String?
+  state     MalaysiaState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  city      MalaysiaCity? @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  postcode  String        @unique
+  placeName String?
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([postcode])
+  @@index([stateId])
+  @@index([cityId])
 }
 
 model Staff {
@@ -265,8 +316,10 @@ model Staff {
   status             PartTimerStatus     @default(ACTIVE)
   preferredLocation  String?
   availability       Json?
+  stateCode          String?
   state              String?
   city               String?
+  postcode           String?
   bio                String?
   experienceSummary  String?
   expectedRateCents  Int?
@@ -375,9 +428,12 @@ model WorkEvent {
   jobType          JobType          @default(EVENT)
   jobStatus        JobStatus        @default(DRAFT)
   location         String
+  stateCode        String?
   state            String?
   city             String?
   address          String?
+  addressLine2     String?
+  postcode         String?
   workDate         DateTime
   endDate          DateTime?
   startTime        String?

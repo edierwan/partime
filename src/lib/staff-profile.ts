@@ -14,6 +14,7 @@ import {
   resolveBankName,
   validateBankAccount,
 } from '@/lib/staff';
+import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
 import { validateProfileImage } from '@/lib/uploads';
 
 export type StaffApprovalStatusValue = 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
@@ -33,6 +34,11 @@ const rawSchema = z.object({
   otherNationality: z.string().trim().optional().default(''),
   passportNumber: z.string().trim().optional().default(''),
   preferredLocation: z.string().trim().optional().default(''),
+  stateCode: z.string().trim().optional().default(''),
+  state: z.string().trim().optional().default(''),
+  city: z.string().trim().optional().default(''),
+  postcode: z.string().trim().optional().default(''),
+  country: z.string().trim().optional().default('Malaysia'),
   bankCode: z.string().trim().optional().default(''),
   customBankName: z.string().trim().optional().default(''),
   bankAccountNumber: z.string().trim().optional().default(''),
@@ -57,6 +63,11 @@ export interface StaffProfileFormData {
   phoneE164: string;
   phoneDisplay: string;
   email: string | null;
+  stateCode: string | null;
+  state: string | null;
+  city: string | null;
+  postcode: string | null;
+  country: string;
   bankCode: string | null;
   bankName: string | null;
   customBankName: string | null;
@@ -86,6 +97,7 @@ export async function parseStaffProfileForm(
     requireIdentity = false,
     requireSkills = false,
     requireConsent = false,
+    requireStructuredLocation = false,
   }: {
     defaultApprovalStatus?: StaffApprovalStatusValue;
     defaultStatus?: PartTimerStatusValue;
@@ -93,6 +105,7 @@ export async function parseStaffProfileForm(
     requireIdentity?: boolean;
     requireSkills?: boolean;
     requireConsent?: boolean;
+    requireStructuredLocation?: boolean;
   } = {},
 ): Promise<StaffProfileParseResult> {
   const raw = {
@@ -108,6 +121,11 @@ export async function parseStaffProfileForm(
     otherNationality: stringValue(fd, 'otherNationality'),
     passportNumber: stringValue(fd, 'passportNumber'),
     preferredLocation: stringValue(fd, 'preferredLocation'),
+    stateCode: stringValue(fd, 'stateCode'),
+    state: stringValue(fd, 'state'),
+    city: stringValue(fd, 'city'),
+    postcode: stringValue(fd, 'postcode'),
+    country: stringValue(fd, 'country') || 'Malaysia',
     bankCode: stringValue(fd, 'bankCode'),
     customBankName: stringValue(fd, 'customBankName'),
     bankAccountNumber: stringValue(fd, 'bankAccountNumber') || stringValue(fd, 'bankAccount'),
@@ -153,6 +171,41 @@ export async function parseStaffProfileForm(
   const phoneE164 = normalizeMalaysiaPhone(value.phone);
   if (!phoneE164) {
     fieldErrors.phone = 'Enter a valid Malaysia mobile number';
+  }
+
+  let normalizedLocation = {
+    stateCode: value.stateCode || null,
+    state: value.state || null,
+    city: value.city || null,
+    postcode: value.postcode || null,
+    country: value.country || 'Malaysia',
+    preferredLocation: value.preferredLocation || null,
+  };
+  const hasStructuredLocationInput = Boolean(value.stateCode || value.state || value.city || value.postcode);
+  if (requireStructuredLocation || hasStructuredLocationInput) {
+    const locationResult = await validateMalaysiaLocation({
+      stateCode: value.stateCode,
+      stateName: value.state,
+      cityName: value.city,
+      postcode: value.postcode,
+      country: value.country,
+      requireState: requireStructuredLocation,
+      requireCity: requireStructuredLocation,
+      requirePostcode: requireStructuredLocation,
+      allowCustomCity: true,
+    });
+    if (!locationResult.ok) {
+      Object.assign(fieldErrors, locationResult.fieldErrors);
+    } else {
+      normalizedLocation = {
+        stateCode: locationResult.data.stateCode,
+        state: locationResult.data.stateName,
+        city: locationResult.data.cityName,
+        postcode: locationResult.data.postcode,
+        country: locationResult.data.country,
+        preferredLocation: locationResult.data.preferredLocation,
+      };
+    }
   }
 
   const email = value.email ? value.email.toLowerCase() : '';
@@ -218,13 +271,18 @@ export async function parseStaffProfileForm(
       phoneE164,
       phoneDisplay: formatMalaysiaPhoneDisplay(phoneE164),
       email: email || null,
+      stateCode: normalizedLocation.stateCode,
+      state: normalizedLocation.state,
+      city: normalizedLocation.city,
+      postcode: normalizedLocation.postcode,
+      country: normalizedLocation.country,
       bankCode: bankCode || null,
       bankName: resolveBankName(bankCode || null, null, customBankName || null),
       customBankName: customBankName || null,
       bankAccountNumber: bankAccountNumber || null,
       approvalStatus: value.approvalStatus || defaultApprovalStatus,
       status: value.status || defaultStatus,
-      preferredLocation: value.preferredLocation || null,
+      preferredLocation: normalizedLocation.preferredLocation,
       availability,
       skillIds,
       otherSkillName,

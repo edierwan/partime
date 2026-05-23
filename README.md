@@ -15,7 +15,8 @@ Part-timer marketplace, attendance, employer registration, WhatsApp offer flow, 
 - CSV export and print-friendly reports
 - No payment gateway, bank payout, or finance app integration
 - Optional S3-compatible profile, portfolio, employer logo, and job media storage
-- Baileys WhatsApp OTP delivery plus offer send/reply webhook handling for tenant `partime`
+- Baileys WhatsApp OTP delivery plus offer send/reply webhook handling with a session-aware gateway client
+- Malaysia negeri/bandar/poskod master data with dependent dropdowns and postcode autocomplete
 
 Stack: Next.js 14 (App Router), TypeScript, Tailwind, Prisma + PostgreSQL, JWT cookie auth (jose).
 
@@ -54,10 +55,12 @@ Open http://localhost:3000 → login with the seeded admin.
 | `S3_PUBLIC_BASE_URL` | optional with S3 | leave blank to serve private S3 objects through `/api/uploads/*` |
 | `LOCAL_UPLOAD_ROOT` | optional | `/app/uploads/partime` |
 | `BAILEYS_API_BASE_URL` | required for OTP/offers | `https://wa.getouch.co` |
-| `BAILEYS_TENANT` | required for OTP/offers | `partime` |
+| `BAILEYS_SESSION_ID` | required for OTP/offers | `getouch-co` |
+| `BAILEYS_TENANT` | optional logical app tag | `partime` |
+| `BAILEYS_PROVIDER_TENANT` | optional logical provider tag override | `partime` |
 | `BAILEYS_API_KEY` | required for OTP/offers | Baileys secret / API key |
 | `BAILEYS_DEFAULT_COUNTRY` | optional | `MY` |
-| `BAILEYS_SEND_PATH` | optional | `/api/sessions/{tenant}/messages` |
+| `BAILEYS_SEND_PATH` | optional | `/api/sessions/{sessionId}/messages` |
 | `BAILEYS_AUTH_HEADER` | optional | `X-WAPI-Secret` |
 | `BAILEYS_WEBHOOK_SECRET` | required for inbound offer replies | Same value as gateway `WAPI_SECRET` |
 
@@ -81,7 +84,13 @@ If you want `/register/part-timer`, `/register/employer`, portfolio media, job m
 1. S3-compatible storage (`S3_*`) for profile photos, portfolio media, employer logos, and job media.
 2. Or local uploads with writable `LOCAL_UPLOAD_ROOT` and a persistent volume.
 
-For OTP and offers, configure the outbound `BAILEYS_*` variables. The GetTouch Baileys runtime currently confirms the direct session route `/api/sessions/:id/messages` with `X-WAPI-Secret`, so Partime keeps `BAILEYS_SEND_PATH` and `BAILEYS_AUTH_HEADER` env-driven.
+For OTP and offers, configure the outbound `BAILEYS_*` variables. The GetTouch Baileys runtime currently confirms the direct session route `/api/sessions/:id/messages` with `X-WAPI-Secret`, so Partime now separates the connected gateway session (`BAILEYS_SESSION_ID`) from Partime's own logical tenant tag (`BAILEYS_TENANT` / `BAILEYS_PROVIDER_TENANT`).
+
+You can verify the outbound session config before testing real OTPs with:
+
+```bash
+npm run whatsapp:test -- +60123456789 "Partime gateway smoke test"
+```
 
 For inbound offer replies, register the gateway webhook through the current env-based dispatcher:
 
@@ -119,7 +128,8 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
    - `NEXT_PUBLIC_APP_URL=https://partime.getouch.co`
    - `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` (for first deploy only)
       - `LOCAL_UPLOAD_ROOT=/app/uploads/partime` or the full `S3_*` set for media uploads
-      - `BAILEYS_API_BASE_URL`, `BAILEYS_TENANT`, `BAILEYS_API_KEY` for WhatsApp OTP and offers
+      - `BAILEYS_API_BASE_URL`, `BAILEYS_SESSION_ID`, `BAILEYS_API_KEY` for WhatsApp OTP and offers
+      - optional `BAILEYS_TENANT` / `BAILEYS_PROVIDER_TENANT` for logical provider tagging in Partime logs
       - `BAILEYS_WEBHOOK_SECRET` for inbound Baileys offer replies
 8. After the first successful deploy, exec into the container once:
    ```bash
@@ -149,6 +159,7 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 - `/register` lets the user choose Part-timer or Employer and stores the selected language.
 - `/register/part-timer` creates a part-timer in `PENDING_REVIEW` state after WhatsApp OTP verification.
 - `/register/employer` creates a pending tenant workspace and employer registration after OTP verification.
+- Employer registration, part-timer registration, employer job posting, and public jobs search now use structured Malaysia `stateCode + state + city + postcode` inputs with postcode-assisted autofill.
 - Malaysian IC numbers auto-detect jantina from the final digit; non-Malaysians use passport number.
 - Part-timers are looked up by Malaysia phone, email, or alias.
 - Pending-review part-timers can only clock in when the admin scan setting explicitly allows it.
@@ -187,6 +198,7 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/admin/jobs` | Marketplace job monitoring |
 | `/admin/offers` | Offer batch monitoring |
 | `/admin/whatsapp` | WhatsApp outbound/inbound logs and config hint |
+| `/admin/settings/locations` | Read-only Malaysia location master data coverage |
 | `/admin/media` | Portfolio/job/logo media monitoring |
 | `/admin/events` | Work events + QR generation |
 | `/admin/events/[id]/qr` | Printable QR page for scanning |
@@ -203,6 +215,9 @@ npm run prisma:seed        # = prisma db seed (uses tsx prisma/seed.ts)
 | `/api/public/otp/verify` | Verify OTP without creating a profile |
 | `/api/public/register/part-timer` | Verify OTP and create pending-review part-timer |
 | `/api/public/register/employer` | Verify OTP and create pending-review employer tenant |
+| `/api/public/locations/states` | Active Malaysia states for dependent dropdowns |
+| `/api/public/locations/cities` | Active Malaysia cities by state code |
+| `/api/public/locations/postcodes` | Malaysia postcode autocomplete suggestions |
 | `/api/webhooks/baileys/inbound` | Signed Baileys inbound webhook for offer replies/statuses |
 
 ---

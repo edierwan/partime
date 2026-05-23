@@ -1,6 +1,7 @@
 import Link from 'next/link';
+import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
 import { prisma } from '@/lib/db';
-import { JOB_CATEGORIES, MALAYSIA_STATES } from '@/lib/marketplace';
+import { JOB_CATEGORIES } from '@/lib/marketplace';
 import { createEmployerJob } from '../actions';
 
 export default async function NewEmployerJobPage({ searchParams }: { searchParams: { error?: string } }) {
@@ -13,9 +14,33 @@ export default async function NewEmployerJobPage({ searchParams }: { searchParam
         <Field label="Job title" name="name" placeholder="Weekend roadshow crew" required />
         <Field label="Venue / location" name="location" placeholder="Mid Valley Megamall" required />
         <div><label className="label">Category</label><select className="input" name="category"><option value="">Select category</option>{JOB_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></div>
-        <div><label className="label">State</label><select className="input" name="state"><option value="">Select state</option>{MALAYSIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></div>
-        <Field label="City" name="city" placeholder="Kuala Lumpur" />
-        <Field label="Address" name="address" placeholder="Full reporting address" />
+        <div className="md:col-span-2">
+          <MalaysiaAddressFields
+            names={{
+              addressLine1: 'address',
+              addressLine2: 'addressLine2',
+              stateCode: 'stateCode',
+              stateName: 'state',
+              cityName: 'city',
+              postcode: 'postcode',
+            }}
+            labels={{
+              addressLine1: 'Address line 1',
+              addressLine2: 'Address line 2 (Optional)',
+              state: 'State',
+              city: 'City',
+              postcode: 'Postcode',
+              selectState: 'Select state',
+              cityPlaceholder: 'e.g. Klang',
+              postcodePlaceholder: 'e.g. 41000',
+              customCityHint: 'If the city is missing, type it manually.',
+            }}
+            placeholders={{ addressLine1: 'Full reporting address', addressLine2: 'Suite, floor, or landmark' }}
+            required={{ state: true, city: true, postcode: true }}
+            initialValue={{ country: 'Malaysia' }}
+            showCountry={false}
+          />
+        </div>
         <Field label="Work date" name="workDate" type="date" required />
         <Field label="Start time" name="startTime" type="time" />
         <Field label="End time" name="endTime" type="time" />

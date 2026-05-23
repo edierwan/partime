@@ -19,6 +19,7 @@ const items = [
   { href: '/admin/reports/daily',            label: 'Daily Report',    icon: '📊' },
   { href: '/admin/reports/weekly-payroll',   label: 'Weekly Payroll',  icon: '💰' },
   { href: '/admin/reports/exceptions',       label: 'Exceptions',      icon: '⚠️' },
+  { href: '/admin/settings/locations',       label: 'Locations',       icon: '📍' },
   { href: '/admin/settings',                 label: 'Settings',        icon: '⚙️' },
 ];
 

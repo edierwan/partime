@@ -15,11 +15,19 @@ The homepage search form routes directly to `/jobs` with these query parameters:
 The `/jobs` page also supports:
 
 - `q`: broad text search across title, work type, location, city, and state.
-- `state`: Malaysia state filter.
+- `stateCode`: canonical Malaysia state code filter used by the dependent dropdown.
+- `state`: canonical Malaysia state name for readable URLs and fallback filtering.
+- `city`: city filter from the dependent dropdown.
 - `category`: public job category.
 - `payType`: `HOURLY`, `DAILY`, or `FIXED`.
 - `minRate`: minimum RM rate.
 - `openOnly`: restricts to jobs with `OPEN` status.
+
+## Malaysia location UX
+
+- `/jobs` keeps the free-text `location` field for venue/address keywords.
+- `/jobs` also provides dependent state and city controls backed by `/api/public/locations/*`.
+- Employer job posting uses the same location master data and stores `stateCode`, `state`, `city`, `postcode`, `address`, and `addressLine2` on `WorkEvent`.
 
 ## Homepage Metrics
 

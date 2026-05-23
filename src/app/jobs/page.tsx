@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
+import { JobsLocationFilters } from '@/components/location/JobsLocationFilters';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
 import { prisma } from '@/lib/db';
 import { normalizeLocale } from '@/lib/public-i18n';
-import { JOB_CATEGORIES, MALAYSIA_STATES, formatJobDate, formatJobRate, jobPublicHref, listPublicJobs } from '@/lib/marketplace';
+import { JOB_CATEGORIES, formatJobDate, formatJobRate, jobPublicHref, listPublicJobs } from '@/lib/marketplace';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -16,7 +17,7 @@ const fallbackImages = [
   'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=900&q=80',
 ];
 
-export default async function JobsPage({ searchParams }: { searchParams: { lang?: string; q?: string; location?: string; state?: string; category?: string; skill?: string; date?: string; payType?: string; minRate?: string; openOnly?: string; interest?: string } }) {
+export default async function JobsPage({ searchParams }: { searchParams: { lang?: string; q?: string; location?: string; stateCode?: string; state?: string; city?: string; category?: string; skill?: string; date?: string; payType?: string; minRate?: string; openOnly?: string; interest?: string } }) {
   const locale = normalizeLocale(searchParams.lang || cookies().get('partime_public_lang')?.value);
   const [jobs, skills] = await Promise.all([
     listPublicJobs(searchParams, 60),
@@ -44,12 +45,9 @@ export default async function JobsPage({ searchParams }: { searchParams: { lang?
           <form action="/jobs" className="mt-4 grid gap-3 md:grid-cols-6">
             <input type="hidden" name="lang" value={locale} />
             <input className="input border-blue-100 md:col-span-2" name="q" defaultValue={searchParams.q || ''} placeholder="Search title, work type or employer" />
-            <input className="input border-blue-100" name="location" defaultValue={searchParams.location || ''} placeholder="City or venue" />
+            <input className="input border-blue-100" name="location" defaultValue={searchParams.location || ''} placeholder="Venue or keyword" />
             <input className="input border-blue-100" name="date" type="date" defaultValue={searchParams.date || ''} />
-            <select className="input border-blue-100" name="state" defaultValue={searchParams.state || ''}>
-              <option value="">All states</option>
-              {MALAYSIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
-            </select>
+            <JobsLocationFilters initialStateCode={searchParams.stateCode} initialStateName={searchParams.state} initialCityName={searchParams.city} />
             <button className="rounded-xl bg-[#075bf2] px-5 py-3 text-sm font-black text-white" type="submit">Filter</button>
             <select className="input border-blue-100 md:col-span-2" name="skill" defaultValue={searchParams.skill || ''}>
               <option value="">Any skill</option>

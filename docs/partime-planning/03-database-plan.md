@@ -17,6 +17,10 @@ PostgreSQL via Prisma. Single database `partime`. No cross-DB usage.
 ### Tenant
 Employer workspace. `WorkEvent`, `AttendanceSession`, and `ScanLog` carry `tenantId` for tenant-aware filtering and future tenant-admin isolation.
 
+Structured location fields:
+- `addressLine1`, `addressLine2`
+- `stateCode`, `state`, `city`, `postcode`, `country`
+
 ### TenantMembership
 Links future tenant admins/managers/viewers to a tenant. Full tenant RBAC is not yet implemented in the admin shell.
 
@@ -48,6 +52,10 @@ Public employer application linked to an optional `Tenant`. Status: `PENDING_OTP
 | approvalStatus | Enum | `APPROVED / PENDING_REVIEW / REJECTED` |
 | status | Enum | `PENDING_OTP / PENDING_REVIEW / ACTIVE / INACTIVE / REJECTED / SUSPENDED` |
 | preferredLocation | String? | |
+| stateCode | String? | Malaysia state code (`SGR`, `KUL`, etc.) |
+| state | String? | canonical state name |
+| city | String? | canonical or custom city name |
+| postcode | String? | 5-digit postcode |
 | availability | Json? | selected availability values |
 | active | Boolean | default true |
 | notes | String? | |
@@ -66,6 +74,12 @@ Tenant-specific approval state for a part-timer: `PENDING / APPROVED / BLOCKED`.
 | tenantId | FK Tenant | required |
 | name | String | |
 | location | String | |
+| stateCode | String? | Malaysia state code |
+| state | String? | canonical state name |
+| city | String? | canonical or custom city name |
+| address | String? | address line 1 |
+| addressLine2 | String? | address line 2 / landmark |
+| postcode | String? | 5-digit postcode |
 | workDate | DateTime (date) | MY date boundary |
 | defaultRateCents | Int | snapshot to sessions |
 | autoBreakRule | Boolean | default true |
@@ -113,6 +127,15 @@ Unique: `(eventId, staffId, workDate)` to prevent duplicate open per day.
 | sendError | String? | provider error summary |
 | payloadJson | Json? | safe metadata only |
 | createdAt | DateTime | |
+
+### MalaysiaState / MalaysiaCity / MalaysiaPostcode
+Read-only Malaysia location master tables used for dependent dropdowns and postcode autocomplete.
+
+- `MalaysiaState`: `code`, `name`, `sortOrder`, `active`
+- `MalaysiaCity`: linked to `MalaysiaState`, unique per `stateId + normalizedName`
+- `MalaysiaPostcode`: linked to `MalaysiaState` and optionally `MalaysiaCity`, unique `postcode`
+
+These tables are seeded idempotently and are used only for normalization and UX assist. Forms still allow custom city names when a town is missing from the current master list.
 
 ### ScanLog
 | field | type | notes |

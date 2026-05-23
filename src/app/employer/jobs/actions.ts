@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { requireSession } from '@/lib/auth';
 import { currentAdminTenantId } from '@/lib/tenant';
 import { parseRateInputToCents } from '@/lib/money';
+import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
 import { parseDateInput } from '@/lib/time';
 import { createMarketplaceJob } from '@/lib/marketplace';
 import { prisma } from '@/lib/db';
@@ -19,9 +20,12 @@ const jobSchema = z.object({
   toolsNeeded: z.string().optional(),
   category: z.string().optional(),
   location: z.string().min(2),
+  stateCode: z.string().optional(),
   state: z.string().optional(),
   city: z.string().optional(),
   address: z.string().optional(),
+  addressLine2: z.string().optional(),
+  postcode: z.string().optional(),
   workDate: z.string().min(8),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
@@ -45,9 +49,12 @@ export async function createEmployerJob(formData: FormData) {
     toolsNeeded: String(formData.get('toolsNeeded') || ''),
     category: String(formData.get('category') || ''),
     location: String(formData.get('location') || ''),
+    stateCode: String(formData.get('stateCode') || ''),
     state: String(formData.get('state') || ''),
     city: String(formData.get('city') || ''),
     address: String(formData.get('address') || ''),
+    addressLine2: String(formData.get('addressLine2') || ''),
+    postcode: String(formData.get('postcode') || ''),
     workDate: String(formData.get('workDate') || ''),
     startTime: String(formData.get('startTime') || ''),
     endTime: String(formData.get('endTime') || ''),
@@ -60,6 +67,18 @@ export async function createEmployerJob(formData: FormData) {
   });
   if (!parsed.success) redirect('/employer/jobs/new?error=invalid');
 
+  const normalizedLocation = await validateMalaysiaLocation({
+    stateCode: parsed.data.stateCode,
+    stateName: parsed.data.state,
+    cityName: parsed.data.city,
+    postcode: parsed.data.postcode,
+    requireState: true,
+    requireCity: true,
+    requirePostcode: true,
+    allowCustomCity: true,
+  });
+  if (!normalizedLocation.ok) redirect('/employer/jobs/new?error=invalid');
+
   const job = await createMarketplaceJob({
     tenantId,
     name: parsed.data.name,
@@ -69,9 +88,12 @@ export async function createEmployerJob(formData: FormData) {
     toolsNeeded: parsed.data.toolsNeeded,
     category: parsed.data.category,
     location: parsed.data.location,
-    state: parsed.data.state,
-    city: parsed.data.city,
+    stateCode: normalizedLocation.data.stateCode,
+    state: normalizedLocation.data.stateName,
+    city: normalizedLocation.data.cityName,
     address: parsed.data.address,
+    addressLine2: parsed.data.addressLine2,
+    postcode: normalizedLocation.data.postcode,
     workDate: parseDateInput(parsed.data.workDate),
     startTime: parsed.data.startTime,
     endTime: parsed.data.endTime,

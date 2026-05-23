@@ -21,6 +21,9 @@
 
 ## Employers / Tenants
 - [ ] Employer registration creates pending tenant and employer registration.
+- [ ] Employer registration logo preview updates immediately after selecting an image.
+- [ ] Employer registration blocks invalid state codes and non-5-digit postcodes.
+- [ ] Employer registration postcode exact match auto-fills city/state when possible.
 - [ ] Admin approve sets employer registration approved and tenant active.
 - [ ] Admin reject sets employer registration rejected and tenant rejected.
 - [ ] Event creation can assign an employer.
@@ -44,11 +47,22 @@
 ## Public registration
 - [ ] Public language selector persists `ms`, `id`, or `en`.
 - [ ] Valid part-timer registration form sends WhatsApp OTP.
+- [ ] Part-timer registration requires state, city, and postcode instead of free-text preferred location.
+- [ ] Custom city entry still submits when the selected state is valid.
 - [ ] OTP verify creates `PENDING_REVIEW` part-timer.
 - [ ] Valid employer registration sends WhatsApp OTP and creates a pending tenant.
 - [ ] Duplicate phone/email/IC/alias returns safe generic failure.
 - [ ] OTP send rate limit works per phone and IP.
 - [ ] Expired / wrong OTP is rejected.
+
+## Marketplace search
+- [ ] Public jobs search filters correctly by state and city.
+- [ ] Job posting stores `stateCode`, `state`, `city`, `postcode`, and address lines.
+
+## WhatsApp
+- [ ] `BAILEYS_SESSION_ID` routes outbound OTP and offers to the correct gateway session.
+- [ ] `npm run whatsapp:test -- +60123456789` prints safe diagnostics and returns non-zero on failure.
+- [ ] `/admin/whatsapp` shows session-aware gateway configuration and recent failed OTP attempts.
 
 ## Attendance
 - [ ] Filters work for date / employer / event / part-timer / status.
@@ -70,5 +84,6 @@
 - [ ] App serves on `0.0.0.0:3000`.
 - [ ] No bank account number in server logs.
 - [ ] `prisma migrate deploy` applies the staff-profile + OTP and multi-tenant migrations cleanly.
+- [ ] `prisma migrate deploy` also applies the Malaysia location master migration cleanly.
 - [ ] S3 bucket `partime-prod` accepts list/upload/read/delete with the Partime-scoped key.
 - [ ] Coolify deploy succeeds at https://partime.getouch.co.
