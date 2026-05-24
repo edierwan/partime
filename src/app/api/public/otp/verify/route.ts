@@ -5,7 +5,7 @@ import { normalizeMalaysiaPhone } from '@/lib/staff';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER', 'STAFF_LOGIN', 'PART_TIMER_LOGIN', 'EMPLOYER_LOGIN']);
+const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER']);
 
 export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);

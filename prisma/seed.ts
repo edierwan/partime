@@ -36,16 +36,63 @@ async function main() {
   }
 
   const existing = await prisma.adminUser.findUnique({ where: { email } });
+  let admin = existing;
   if (!existing) {
     const passwordHash = await bcrypt.hash(password, 10);
-    await prisma.adminUser.create({
+    admin = await prisma.adminUser.create({
       data: { email, passwordHash, name: 'Admin' },
     });
     console.log(`✓ Created admin ${email}`);
   } else {
     console.log(`= Admin ${email} already exists, skipping.`);
   }
+  if (admin) await ensureCanonicalAdminAccount(admin);
 
+
+async function ensureCanonicalAdminAccount(admin: { id: string; email: string; passwordHash: string; name: string | null; createdAt: Date; platformRole: string }) {
+  try {
+    const userId = `user_admin_${admin.id}`;
+    const now = new Date();
+    await prisma.userAccount.upsert({
+      where: { id: userId },
+      update: { displayName: admin.name || admin.email, status: 'ACTIVE' },
+      create: {
+        id: userId,
+        displayName: admin.name || admin.email,
+        status: 'ACTIVE',
+        preferredLocale: 'ms',
+        createdAt: admin.createdAt,
+        updatedAt: now,
+      },
+    });
+    await prisma.userIdentity.upsert({
+      where: { type_valueNormalized: { type: 'EMAIL', valueNormalized: admin.email.toLowerCase() } },
+      update: { userId, valueDisplay: admin.email, isPrimary: true },
+      create: {
+        userId,
+        type: 'EMAIL',
+        valueNormalized: admin.email.toLowerCase(),
+        valueDisplay: admin.email,
+        verifiedAt: admin.createdAt,
+        isPrimary: true,
+      },
+    });
+    await prisma.userCredential.upsert({
+      where: { userId },
+      update: { passwordHash: admin.passwordHash, forcePasswordReset: false, failedLoginCount: 0, lockedUntil: null },
+      create: { userId, passwordHash: admin.passwordHash, passwordUpdatedAt: admin.createdAt, forcePasswordReset: false },
+    });
+    await prisma.platformUserRole.upsert({
+      where: { userId_role: { userId, role: 'PLATFORM_ADMIN' } },
+      update: {},
+      create: { userId, role: 'PLATFORM_ADMIN' },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (!/UserAccount|UserIdentity|UserCredential|PlatformUserRole|does not exist|not exist/i.test(message)) throw error;
+    console.log('= Canonical admin account skipped until auth migrations are applied.');
+  }
+}
   const tenant = await prisma.tenant.upsert({
     where: { slug: 'platform-default' },
     update: {},

@@ -8,6 +8,7 @@
     "prepare:standalone": "node scripts/prepare-standalone.mjs",
     "start": "npm run prisma:migrate && HOSTNAME=0.0.0.0 PORT=${PORT:-3000} node .next/standalone/server.js",
     "lint": "eslint .",
+    "test": "tsx --test tests/**/*.test.ts",
     "whatsapp:test": "tsx scripts/whatsapp-test.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",

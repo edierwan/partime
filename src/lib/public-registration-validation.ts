@@ -1,4 +1,5 @@
 import { isValidMalaysiaIc, normalizeAliasPanggilan, normalizeIcNumber, normalizeMalaysiaPhone, normalizePassportNumber } from '@/lib/staff';
+import { passwordsMatch } from '@/lib/password-policy';
 
 export type PublicFieldErrors = Record<string, string>;
 
@@ -11,6 +12,8 @@ export interface EmployerRegistrationDraft {
   contactPhone: string;
   contactPhoneE164: string | null;
   contactEmail: string | null;
+  password: string;
+  confirmPassword: string;
   industry: string;
   addressLine1: string;
   addressLine2: string;
@@ -35,6 +38,8 @@ export interface PartTimerRegistrationDraft {
   phone: string;
   phoneE164: string | null;
   email: string | null;
+  password: string;
+  confirmPassword: string;
   stateCode: string;
   state: string;
   city: string;
@@ -57,6 +62,8 @@ export function validateEmployerRegistrationDraft(source: FormValueSource): Publ
     contactPhone: valueOf(source, 'contactPhone') || valueOf(source, 'phone'),
     contactPhoneE164: null,
     contactEmail: normalizeOptionalEmail(valueOf(source, 'contactEmail')),
+    password: valueOf(source, 'password'),
+    confirmPassword: valueOf(source, 'confirmPassword'),
     industry: valueOf(source, 'industry'),
     addressLine1: valueOf(source, 'addressLine1'),
     addressLine2: valueOf(source, 'addressLine2'),
@@ -92,6 +99,11 @@ export function validateEmployerRegistrationDraft(source: FormValueSource): Publ
   } else if (valueOf(source, 'contactEmail') && !data.contactEmail) {
     fieldErrors.contactEmail = 'Enter a valid contact email.';
   }
+  const passwordValidation = passwordsMatch(data.password, data.confirmPassword);
+  if (!passwordValidation.ok) {
+    fieldErrors.password = passwordValidation.message || 'Enter a valid password.';
+    fieldErrors.confirmPassword = passwordValidation.message || 'Passwords do not match.';
+  }
   if (data.hiringNeeds.length === 0) fieldErrors.hiringNeeds = 'Please select at least one hiring need.';
   if (!data.consent) fieldErrors.consent = 'Please confirm the information is correct before requesting OTP.';
 
@@ -115,6 +127,8 @@ export function validatePartTimerRegistrationDraft(source: FormValueSource): Pub
     phone: valueOf(source, 'phone'),
     phoneE164: null,
     email: normalizeOptionalEmail(valueOf(source, 'email')),
+    password: valueOf(source, 'password'),
+    confirmPassword: valueOf(source, 'confirmPassword'),
     stateCode: valueOf(source, 'stateCode').toUpperCase(),
     state: valueOf(source, 'state'),
     city: valueOf(source, 'city'),
@@ -153,6 +167,11 @@ export function validatePartTimerRegistrationDraft(source: FormValueSource): Pub
     data.email = null;
   } else if (valueOf(source, 'email') && !data.email) {
     fieldErrors.email = 'Enter a valid email address.';
+  }
+  const passwordValidation = passwordsMatch(data.password, data.confirmPassword);
+  if (!passwordValidation.ok) {
+    fieldErrors.password = passwordValidation.message || 'Enter a valid password.';
+    fieldErrors.confirmPassword = passwordValidation.message || 'Passwords do not match.';
   }
 
   if (!data.stateCode) {

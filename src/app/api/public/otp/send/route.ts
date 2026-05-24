@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { OtpPurpose } from '@prisma/client';
-import { prisma } from '@/lib/db';
 import { getBaileysGatewayDiagnostics } from '@/lib/baileys/client';
 import { parseEmployerRegistrationForm } from '@/lib/employer-registration';
 import { markOtpSendFailed, markOtpSent, reserveOtpSend } from '@/lib/otp-service';
@@ -11,7 +10,7 @@ import { sendWhatsAppOtp } from '@/lib/whatsapp';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER', 'STAFF_LOGIN', 'PART_TIMER_LOGIN', 'EMPLOYER_LOGIN']);
+const allowedPurposes = new Set(['PART_TIMER_REGISTER', 'EMPLOYER_REGISTER']);
 
 export async function POST(req: Request) {
   const formData = await req.formData().catch(() => null);
@@ -38,6 +37,7 @@ export async function POST(req: Request) {
       requireSkills: true,
       requireConsent: true,
       requireStructuredLocation: true,
+      requirePassword: true,
     });
     if (!parsed.ok) {
       return NextResponse.json({ ok: false, error: 'REGISTRATION_INCOMPLETE', message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });

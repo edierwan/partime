@@ -20,7 +20,14 @@ export async function getEmployerPortalContext(session?: SessionPayload | null):
   if (!activeSession || activeSession.role !== 'EMPLOYER') return null;
 
   const membership = await prisma.tenantMembership.findFirst({
-    where: { adminUserId: activeSession.sub },
+    where: {
+      ...(activeSession.tenantId ? { tenantId: activeSession.tenantId } : {}),
+      OR: [
+        { userId: activeSession.sub },
+        { adminUserId: activeSession.sub },
+      ],
+      status: 'ACTIVE',
+    },
     orderBy: { createdAt: 'asc' },
   });
   if (!membership) return null;

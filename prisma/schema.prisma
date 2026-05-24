@@ -9,6 +9,141 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserAccountStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum UserIdentityType {
+  EMAIL
+  PHONE
+}
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  SUPPORT
+  FINANCE
+  OPERATIONS
+}
+
+enum TenantMemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum AuthVerificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum AuthVerificationPurpose {
+  VERIFY_PHONE
+  VERIFY_EMAIL
+  PASSWORD_RESET
+  HIGH_RISK_ACTION
+}
+
+model UserAccount {
+  id              String            @id @default(cuid())
+  displayName     String
+  status          UserAccountStatus @default(PENDING)
+  preferredLocale String            @default("ms")
+  lastLoginAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  identities            UserIdentity[]
+  credential            UserCredential?
+  platformRoles         PlatformUserRole[]
+  tenantMemberships     TenantMembership[]
+  staffProfiles         Staff[]
+  employerRegistrations EmployerRegistration[]
+  verificationTokens    AuthVerificationToken[]
+
+  @@index([status])
+  @@index([displayName])
+}
+
+model UserIdentity {
+  id              String           @id @default(cuid())
+  user            UserAccount      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  type            UserIdentityType
+  valueNormalized String
+  valueDisplay    String
+  verifiedAt      DateTime?
+  isPrimary       Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  verificationTokens AuthVerificationToken[]
+
+  @@unique([type, valueNormalized])
+  @@index([userId, type])
+  @@index([valueNormalized])
+}
+
+model UserCredential {
+  id                 String      @id @default(cuid())
+  user               UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             String      @unique
+  passwordHash       String
+  passwordUpdatedAt  DateTime    @default(now())
+  forcePasswordReset Boolean     @default(false)
+  failedLoginCount   Int         @default(0)
+  lockedUntil        DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([lockedUntil])
+}
+
+model PlatformUserRole {
+  id        String       @id @default(cuid())
+  user      UserAccount  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      PlatformRole
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, role])
+  @@index([role])
+}
+
+model AuthVerificationToken {
+  id                String                  @id @default(cuid())
+  user              UserAccount?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId            String?
+  identity          UserIdentity?           @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  identityId        String?
+  channel           AuthVerificationChannel
+  purpose           AuthVerificationPurpose
+  targetNormalized  String
+  codeHash          String?
+  tokenHash         String?
+  expiresAt         DateTime
+  consumedAt        DateTime?
+  attemptCount      Int                     @default(0)
+  maxAttempts       Int                     @default(5)
+  sendCount         Int                     @default(1)
+  lastSentAt        DateTime?
+  requestIp         String?
+  userAgent         String?
+  providerMessageId String?
+  payloadJson       Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([targetNormalized, purpose, createdAt])
+  @@index([userId, purpose, createdAt])
+  @@index([identityId])
+  @@index([expiresAt])
+  @@index([consumedAt])
+  @@index([requestIp, createdAt])
+}
+
 model AdminUser {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -206,17 +341,27 @@ model TenantMembership {
   tenantId    String
   adminUser   AdminUser  @relation(fields: [adminUserId], references: [id])
   adminUserId String
+  user        UserAccount? @relation(fields: [userId], references: [id])
+  userId      String?
   role        TenantRole @default(VIEWER)
+  status      TenantMemberStatus @default(ACTIVE)
+  invitedAt   DateTime?
+  joinedAt    DateTime?
   createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@unique([tenantId, adminUserId])
+  @@unique([tenantId, userId])
   @@index([adminUserId])
+  @@index([userId, status])
 }
 
 model EmployerRegistration {
   id                     String                     @id @default(cuid())
   tenant                 Tenant?                    @relation(fields: [tenantId], references: [id])
   tenantId               String?
+  submittedByUser        UserAccount?               @relation(fields: [submittedByUserId], references: [id])
+  submittedByUserId      String?
   companyName            String
   contactPersonName      String
   contactPhoneE164       String
@@ -239,6 +384,7 @@ model EmployerRegistration {
   updatedAt              DateTime                   @updatedAt
 
   @@index([status])
+  @@index([submittedByUserId])
   @@index([contactPhoneE164])
   @@index([contactEmail])
 }
@@ -294,6 +440,8 @@ model MalaysiaPostcode {
 
 model Staff {
   id                 String              @id @default(cuid())
+  user               UserAccount?        @relation(fields: [userId], references: [id])
+  userId             String?             @unique
   payName            String
   aliasPanggilan     String              @unique @map("alias")
   fullName           String

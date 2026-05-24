@@ -15,6 +15,7 @@ import {
   validateBankAccount,
 } from '@/lib/staff';
 import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
+import { passwordsMatch } from '@/lib/password-policy';
 import { validateProfileImage } from '@/lib/uploads';
 
 export type StaffApprovalStatusValue = 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED';
@@ -28,6 +29,8 @@ const rawSchema = z.object({
   fullName: z.string().trim().min(1, 'Full name required'),
   phone: z.string().trim().min(1, 'Phone number required'),
   email: z.string().trim().optional().default(''),
+  password: z.string().optional().default(''),
+  confirmPassword: z.string().optional().default(''),
   icNumber: z.string().trim().optional().default(''),
   gender: z.enum(['AUTO', 'LELAKI', 'PEREMPUAN', 'TIDAK_DINYATAKAN', 'UNKNOWN']).optional().default('AUTO'),
   nationality: z.string().trim().optional().default('Malaysia'),
@@ -63,6 +66,7 @@ export interface StaffProfileFormData {
   phoneE164: string;
   phoneDisplay: string;
   email: string | null;
+  password: string | null;
   stateCode: string | null;
   state: string | null;
   city: string | null;
@@ -98,6 +102,7 @@ export async function parseStaffProfileForm(
     requireSkills = false,
     requireConsent = false,
     requireStructuredLocation = false,
+    requirePassword = false,
   }: {
     defaultApprovalStatus?: StaffApprovalStatusValue;
     defaultStatus?: PartTimerStatusValue;
@@ -106,6 +111,7 @@ export async function parseStaffProfileForm(
     requireSkills?: boolean;
     requireConsent?: boolean;
     requireStructuredLocation?: boolean;
+    requirePassword?: boolean;
   } = {},
 ): Promise<StaffProfileParseResult> {
   const raw = {
@@ -115,6 +121,8 @@ export async function parseStaffProfileForm(
     fullName: stringValue(fd, 'fullName'),
     phone: stringValue(fd, 'phone'),
     email: stringValue(fd, 'email'),
+    password: stringValue(fd, 'password'),
+    confirmPassword: stringValue(fd, 'confirmPassword'),
     icNumber: stringValue(fd, 'icNumber'),
     gender: (stringValue(fd, 'gender') || 'AUTO') as StaffGenderFormValue,
     nationality: stringValue(fd, 'nationality') || 'Malaysia',
@@ -212,6 +220,13 @@ export async function parseStaffProfileForm(
   if (email && !z.string().email().safeParse(email).success) {
     fieldErrors.email = 'Enter a valid email address';
   }
+  if (requirePassword) {
+    const passwordValidation = passwordsMatch(value.password, value.confirmPassword);
+    if (!passwordValidation.ok) {
+      fieldErrors.password = passwordValidation.message || 'Enter a valid password.';
+      fieldErrors.confirmPassword = passwordValidation.message || 'Passwords do not match.';
+    }
+  }
 
   const icNumberNormalized = normalizeIcNumber(value.icNumber);
   const nationality = resolveNationality(value.nationality, value.otherNationality);
@@ -271,6 +286,7 @@ export async function parseStaffProfileForm(
       phoneE164,
       phoneDisplay: formatMalaysiaPhoneDisplay(phoneE164),
       email: email || null,
+      password: requirePassword ? value.password : null,
       stateCode: normalizedLocation.stateCode,
       state: normalizedLocation.state,
       city: normalizedLocation.city,

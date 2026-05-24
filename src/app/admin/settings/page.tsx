@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { getSession } from '@/lib/auth';
+import { requireAdminSession } from '@/lib/auth';
 import { ALLOW_PENDING_CLOCK_IN_KEY, getBooleanAppSetting } from '@/lib/app-settings';
 import { saveScanSettings } from './actions';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
-  const s = await getSession();
+  const s = await requireAdminSession();
   const allowPendingClockIn = await getBooleanAppSetting(ALLOW_PENDING_CLOCK_IN_KEY, false);
   return (
     <div className="space-y-6 max-w-2xl">

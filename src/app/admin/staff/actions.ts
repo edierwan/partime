@@ -2,14 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
-import { requireSession } from '@/lib/auth';
+import { requireAdminSession } from '@/lib/auth';
 import { deleteStoredProfileImage, saveStaffProfileImage } from '@/lib/uploads';
 import { parseStaffProfileForm } from '@/lib/staff-profile';
 
 export type StaffFormState = { ok: boolean; error?: string; fieldErrors?: Record<string, string> };
 
 export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffFormState> {
-  await requireSession();
+  await requireAdminSession();
 
   const parsed = await parseStaffProfileForm(fd, { defaultApprovalStatus: 'APPROVED', defaultStatus: 'ACTIVE', defaultActive: true });
   if (!parsed.ok) return parsed;
@@ -143,21 +143,21 @@ export async function saveStaff(_: StaffFormState, fd: FormData): Promise<StaffF
 }
 
 export async function deactivateStaff(id: string) {
-  await requireSession();
+  await requireAdminSession();
   await prisma.staff.update({ where: { id }, data: { active: false, status: 'INACTIVE' } });
   revalidatePath('/admin/staff');
   revalidatePath('/admin/part-timers');
 }
 
 export async function activateStaff(id: string) {
-  await requireSession();
+  await requireAdminSession();
   await prisma.staff.update({ where: { id }, data: { active: true, status: 'ACTIVE', approvalStatus: 'APPROVED' } });
   revalidatePath('/admin/staff');
   revalidatePath('/admin/part-timers');
 }
 
 export async function setStaffApprovalStatus(id: string, approvalStatus: 'APPROVED' | 'PENDING_REVIEW' | 'REJECTED') {
-  await requireSession();
+  await requireAdminSession();
   const status = approvalStatus === 'APPROVED' ? 'ACTIVE' : approvalStatus === 'REJECTED' ? 'REJECTED' : 'PENDING_REVIEW';
   await prisma.staff.update({ where: { id }, data: { approvalStatus, status, active: status !== 'REJECTED' } });
   revalidatePath('/admin/staff');

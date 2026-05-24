@@ -9,6 +9,7 @@ export interface EmployerRegistrationFormData {
   contactPhone: string;
   contactPhoneE164: string;
   contactEmail: string | null;
+  password: string;
   industry: string;
   addressLine1: string;
   addressLine2: string | null;
@@ -56,6 +57,7 @@ export async function parseEmployerRegistrationForm(fd: FormData): Promise<Emplo
       contactPhone: basic.data.contactPhone,
       contactPhoneE164: basic.data.contactPhoneE164 || '',
       contactEmail: basic.data.contactEmail || null,
+      password: basic.data.password,
       industry: basic.data.industry,
       addressLine1: toTitleCaseInput(basic.data.addressLine1),
       addressLine2: basic.data.addressLine2 ? toTitleCaseInput(basic.data.addressLine2) : null,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/db';
+import { createSessionToken, setSessionCookie } from '@/lib/auth';
 import { verifyOtpCode } from '@/lib/otp-service';
 import { parseStaffProfileForm } from '@/lib/staff-profile';
 import { savePartTimerPortfolioMedia, saveStaffProfileImage } from '@/lib/uploads';
@@ -22,6 +24,7 @@ export async function POST(req: Request) {
     requireSkills: true,
     requireConsent: true,
     requireStructuredLocation: true,
+    requirePassword: true,
   });
   if (!parsed.ok) return NextResponse.json({ ok: false, message: parsed.error, fieldErrors: parsed.fieldErrors }, { status: 400 });
 
@@ -55,45 +58,100 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, message: 'We could not complete registration. Please contact admin if you already registered.' }, { status: 400 });
   }
 
-  const created = await prisma.staff.create({
-    data: {
-      payName: data.payName,
-      aliasPanggilan: data.aliasPanggilan,
-      fullName: data.fullName,
-      icNumberNormalized: data.icNumberNormalized,
-      icNumberDisplay: data.icNumberDisplay,
-      gender: data.gender,
-      nationality: data.nationality,
-      otherNationality: data.otherNationality,
-      passportNumber: data.passportNumber,
-      phoneE164: data.phoneE164,
-      phoneDisplay: data.phoneDisplay,
-      email: data.email,
-      stateCode: data.stateCode,
-      state: data.state,
-      city: data.city,
-      postcode: data.postcode,
-      bankCode: data.bankCode,
-      bankName: data.bankName,
-      customBankName: data.customBankName,
-      bankAccountNumber: data.bankAccountNumber,
-      approvalStatus: 'PENDING_REVIEW',
-      status: 'PENDING_REVIEW',
-      preferredLocation: data.preferredLocation,
-      availability: data.availability,
-      active: true,
-      notes: data.notes,
+  const existingIdentity = await prisma.userIdentity.findFirst({
+    where: {
+      OR: [
+        { type: 'PHONE', valueNormalized: data.phoneE164 },
+        ...(data.email ? [{ type: 'EMAIL' as const, valueNormalized: data.email }] : []),
+      ],
     },
     select: { id: true },
   });
+  if (existingIdentity) {
+    return NextResponse.json({ ok: false, message: 'This email or phone number is already registered.' }, { status: 400 });
+  }
 
-  await syncPartTimerSkills({ partTimerId: created.id, skillIds: data.skillIds, otherSkillName: data.otherSkillName });
+  const now = new Date();
+  const passwordHash = await bcrypt.hash(data.password || '', 10);
+
+  const created = await prisma.$transaction(async (tx) => {
+    const user = await tx.userAccount.create({
+      data: {
+        displayName: data.fullName,
+        status: 'PENDING',
+        preferredLocale: 'ms',
+        identities: {
+          create: [
+            {
+              type: 'PHONE',
+              valueNormalized: data.phoneE164,
+              valueDisplay: data.phoneDisplay,
+              verifiedAt: now,
+              isPrimary: true,
+            },
+            ...(data.email ? [{
+              type: 'EMAIL' as const,
+              valueNormalized: data.email,
+              valueDisplay: data.email,
+              verifiedAt: null,
+              isPrimary: false,
+            }] : []),
+          ],
+        },
+        credential: {
+          create: {
+            passwordHash,
+            passwordUpdatedAt: now,
+          },
+        },
+      },
+      select: { id: true, displayName: true },
+    });
+
+    const staff = await tx.staff.create({
+      data: {
+        userId: user.id,
+        payName: data.payName,
+        aliasPanggilan: data.aliasPanggilan,
+        fullName: data.fullName,
+        icNumberNormalized: data.icNumberNormalized,
+        icNumberDisplay: data.icNumberDisplay,
+        gender: data.gender,
+        nationality: data.nationality,
+        otherNationality: data.otherNationality,
+        passportNumber: data.passportNumber,
+        phoneE164: data.phoneE164,
+        phoneDisplay: data.phoneDisplay,
+        email: data.email,
+        stateCode: data.stateCode,
+        state: data.state,
+        city: data.city,
+        postcode: data.postcode,
+        bankCode: data.bankCode,
+        bankName: data.bankName,
+        customBankName: data.customBankName,
+        bankAccountNumber: data.bankAccountNumber,
+        approvalStatus: 'PENDING_REVIEW',
+        status: 'PENDING_REVIEW',
+        preferredLocation: data.preferredLocation,
+        availability: data.availability,
+        active: true,
+        notes: data.notes,
+      },
+      select: { id: true },
+    });
+
+    await tx.staffOtp.update({ where: { id: otpResult.otp.id }, data: { consumedAt: now } });
+    return { staff, user };
+  });
+
+  await syncPartTimerSkills({ partTimerId: created.staff.id, skillIds: data.skillIds, otherSkillName: data.otherSkillName });
 
   let warning: string | null = null;
   if (data.profileImage) {
     try {
-      const uploaded = await saveStaffProfileImage({ staffId: created.id, file: data.profileImage });
-      await prisma.staff.update({ where: { id: created.id }, data: { profileImageKey: uploaded.key, profileImageUrl: uploaded.url } });
+      const uploaded = await saveStaffProfileImage({ staffId: created.staff.id, file: data.profileImage });
+      await prisma.staff.update({ where: { id: created.staff.id }, data: { profileImageKey: uploaded.key, profileImageUrl: uploaded.url } });
     } catch {
       warning = 'Registration completed, but the profile photo could not be stored. Admin can add it later.';
     }
@@ -104,9 +162,9 @@ export async function POST(req: Request) {
     try {
       const uploads = [];
       for (const [index, file] of portfolioFiles.entries()) {
-        const uploaded = await savePartTimerPortfolioMedia({ partTimerId: created.id, file });
+        const uploaded = await savePartTimerPortfolioMedia({ partTimerId: created.staff.id, file });
         uploads.push({
-          partTimerId: created.id,
+          partTimerId: created.staff.id,
           mediaType: uploaded.mediaType,
           title: uploaded.filename,
           url: uploaded.url,
@@ -123,6 +181,15 @@ export async function POST(req: Request) {
     }
   }
 
-  await prisma.staffOtp.update({ where: { id: otpResult.otp.id }, data: { consumedAt: new Date() } });
-  return NextResponse.json({ ok: true, message: 'Registration successful. Your profile is pending admin review.', warning });
+  const token = await createSessionToken({
+    sub: created.user.id,
+    email: data.email || '',
+    name: created.user.displayName || data.fullName,
+    role: 'WORKER',
+    tenantId: null,
+    phoneE164: data.phoneE164,
+  });
+  await setSessionCookie(token);
+
+  return NextResponse.json({ ok: true, message: 'Registration successful. Your profile is pending admin review.', warning, redirectTo: '/worker/dashboard?registered=1' });
 }

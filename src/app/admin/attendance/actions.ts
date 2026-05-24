@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { requireSession } from '@/lib/auth';
+import { requireAdminSession } from '@/lib/auth';
 import { recalc } from '@/lib/calc';
 import { parseDateInput, parseTimeOnDate } from '@/lib/time';
 import { parseRateInputToCents } from '@/lib/money';
@@ -25,7 +25,7 @@ const schema = z.object({
 export type AdjustState = { ok: boolean; error?: string };
 
 export async function adjustAttendance(_: AdjustState, fd: FormData): Promise<AdjustState> {
-  const session = await requireSession();
+  const session = await requireAdminSession();
   const data = {
     id: fd.get('id') as string,
     clockInDate: (fd.get('clockInDate') as string) || '',
@@ -52,7 +52,7 @@ export async function adjustAttendance(_: AdjustState, fd: FormData): Promise<Ad
       where: { id: v.id },
       data: { status: 'CANCELLED', adminNotes: v.adminNotes ?? sess.adminNotes },
     });
-    await audit(v.id, session.sub, v.reason, before, { ...before, status: 'CANCELLED' });
+    await audit(v.id, legacyAdminIdForSession(session.sub), v.reason, before, { ...before, status: 'CANCELLED' });
     revalidatePath('/admin/attendance');
     revalidatePath('/admin/reports/exceptions');
     return { ok: true };
@@ -100,7 +100,7 @@ export async function adjustAttendance(_: AdjustState, fd: FormData): Promise<Ad
       workDate: parseDateInput(v.clockInDate),
     },
   });
-  await audit(v.id, session.sub, v.reason, before, serialize(updated));
+  await audit(v.id, legacyAdminIdForSession(session.sub), v.reason, before, serialize(updated));
   revalidatePath('/admin/attendance');
   revalidatePath('/admin/reports/exceptions');
   revalidatePath('/admin/reports/weekly-payroll');
@@ -126,4 +126,8 @@ async function audit(sessionId: string, adminId: string, reason: string, before:
   await prisma.attendanceAdjustmentAudit.create({
     data: { sessionId, adminId, reason, beforeJson: before, afterJson: after },
   });
+}
+
+function legacyAdminIdForSession(userId: string): string {
+  return userId.startsWith('user_admin_') ? userId.slice('user_admin_'.length) : userId;
 }

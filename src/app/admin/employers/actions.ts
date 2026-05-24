@@ -2,10 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
-import { requireSession } from '@/lib/auth';
+import { requireAdminSession } from '@/lib/auth';
 
 export async function approveEmployerRegistration(id: string) {
-  await requireSession();
+  await requireAdminSession();
   const registration = await prisma.employerRegistration.update({
     where: { id },
     data: { status: 'APPROVED', rejectionReason: null },
@@ -18,7 +18,7 @@ export async function approveEmployerRegistration(id: string) {
 }
 
 export async function rejectEmployerRegistration(id: string, reason?: string) {
-  await requireSession();
+  await requireAdminSession();
   const registration = await prisma.employerRegistration.update({
     where: { id },
     data: { status: 'REJECTED', rejectionReason: reason || null },

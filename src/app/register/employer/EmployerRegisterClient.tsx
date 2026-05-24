@@ -280,6 +280,10 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
             <Input name="contactPhone" label={t.contactPhone} placeholder="e.g. +60 12-345 6789" error={fieldErrors.contactPhone} inputMode="tel" />
           </div>
           <Input name="contactEmail" label={t.contactEmail} error={fieldErrors.contactEmail} inputMode="email" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input name="password" type="password" label={t.password} error={fieldErrors.password} />
+            <Input name="confirmPassword" type="password" label={t.confirmPassword} error={fieldErrors.confirmPassword} />
+          </div>
         </Section>
 
         <Section title="3. Hiring Needs">
@@ -353,12 +357,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="space-y-4"><h2 className="text-base font-semibold text-ink-950">{title}</h2>{children}</section>;
 }
 
-function Input({ name, label, placeholder, error, inputMode, defaultValue, titleCase = false }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; defaultValue?: string; titleCase?: boolean }) {
+function Input({ name, label, placeholder, error, inputMode, defaultValue, titleCase = false, type = 'text' }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; defaultValue?: string; titleCase?: boolean; type?: React.HTMLInputTypeAttribute }) {
   return (
     <div>
       <label className="label">{label}</label>
       <input
         className="input"
+        type={type}
         name={name}
         data-field-target={name}
         data-title-case-input={titleCase ? 'true' : undefined}

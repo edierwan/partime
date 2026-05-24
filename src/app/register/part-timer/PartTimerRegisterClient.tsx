@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/Avatar';
 import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
@@ -22,6 +23,7 @@ type FieldErrors = Record<string, string>;
 
 export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: PublicLocale; skillCatalog: SkillCatalog }) {
   const t = publicDict[locale];
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState<'form' | 'otp' | 'done'>('form');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
@@ -162,6 +164,11 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
       }
       return;
     }
+    if (data.redirectTo) {
+      router.push(data.redirectTo);
+      router.refresh();
+      return;
+    }
     setStep('done');
     setMessage(t.successPartTimer);
   }
@@ -251,6 +258,10 @@ export function PartTimerRegisterClient({ locale, skillCatalog }: { locale: Publ
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input name="phone" label={t.mobile} placeholder="e.g. +60 12-345 6789" error={fieldErrors.phone} inputMode="tel" />
             <Input name="email" label={`${t.email} (Optional)`} placeholder="e.g. nur@example.com" error={fieldErrors.email} inputMode="email" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Input name="password" type="password" label={t.password} error={fieldErrors.password} />
+            <Input name="confirmPassword" type="password" label={t.confirmPassword} error={fieldErrors.confirmPassword} />
           </div>
           <MalaysiaAddressFields
             errors={fieldErrors}
@@ -386,11 +397,11 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return <section className="space-y-4"><h2 className="text-base font-semibold text-ink-950">{title}</h2>{children}</section>;
 }
 
-function Input({ name, label, placeholder, error, inputMode, onChange }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; onChange?: (value: string) => void }) {
+function Input({ name, label, placeholder, error, inputMode, onChange, type = 'text' }: { name: string; label: string; placeholder?: string; error?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']; onChange?: (value: string) => void; type?: React.HTMLInputTypeAttribute }) {
   return (
     <div>
       <label className="label">{label}</label>
-      <input className="input" name={name} placeholder={placeholder} inputMode={inputMode} onChange={(event) => onChange?.(event.target.value)} />
+      <input className="input" type={type} name={name} placeholder={placeholder} inputMode={inputMode} onChange={(event) => onChange?.(event.target.value)} />
       <FieldError error={error} />
     </div>
   );

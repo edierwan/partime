@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/db';
-import { requireSession } from '@/lib/auth';
+import { requireAdminSession } from '@/lib/auth';
 import { generateScanToken } from '@/lib/token';
 import { parseRateInputToCents } from '@/lib/money';
 import { parseDateInput } from '@/lib/time';
@@ -24,7 +24,7 @@ const schema = z.object({
 export type EventFormState = { ok: boolean; error?: string; fieldErrors?: Record<string, string> };
 
 export async function saveEvent(_: EventFormState, fd: FormData): Promise<EventFormState> {
-  await requireSession();
+  await requireAdminSession();
   const data = {
     id: (fd.get('id') as string) || undefined,
     tenantId: (fd.get('tenantId') as string) || undefined,
@@ -76,7 +76,7 @@ export async function saveEvent(_: EventFormState, fd: FormData): Promise<EventF
 }
 
 export async function setEventActive(id: string, active: boolean) {
-  await requireSession();
+  await requireAdminSession();
   await prisma.workEvent.update({ where: { id }, data: { active } });
   revalidatePath('/admin/events');
 }

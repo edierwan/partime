@@ -29,13 +29,14 @@ export function PublicLanguageSelector({ locale }: { locale: PublicLocale }) {
   }
 
   return (
-    <div className="inline-flex rounded-xl border border-ink-200 bg-white p-1 shadow-sm">
+    <div className="inline-flex rounded-2xl border border-white/80 bg-white/80 p-1 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.4)] backdrop-blur-sm">
       {PUBLIC_LOCALES.map((item) => (
         <button
           key={item.code}
           type="button"
           onClick={() => onChange(item.code)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${value === item.code ? 'bg-brand-500 text-white' : 'text-ink-600 hover:bg-ink-50'}`}
+          aria-pressed={value === item.code}
+          className={`rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${value === item.code ? 'bg-brand-50 text-brand-700 shadow-sm' : 'text-ink-500 hover:bg-ink-50 hover:text-ink-700'}`}
         >
           {item.label}
         </button>

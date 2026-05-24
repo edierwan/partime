@@ -1,0 +1,7 @@
+-- Phase 3: application cutover marker.
+-- The app should read/write UserAccount, UserIdentity, UserCredential, PlatformUserRole,
+-- TenantMembership.userId, Staff.userId, EmployerRegistration.submittedByUserId, and
+-- AuthVerificationToken after phase 1 and phase 2 are reviewed and applied.
+--
+-- Intentionally no destructive SQL here.
+-- Do not drop AdminUser, Staff, StaffOtp, or TenantMembership.adminUserId in this phase.

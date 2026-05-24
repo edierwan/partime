@@ -9,7 +9,7 @@ function secret() {
   return new TextEncoder().encode(s);
 }
 
-type SessionRole = 'ADMIN' | 'EMPLOYER' | 'PART_TIMER';
+type SessionRole = 'ADMIN' | 'EMPLOYER' | 'WORKER';
 
 interface ProxySession {
   role: SessionRole;
@@ -41,21 +41,24 @@ export async function proxy(req: NextRequest) {
     pathname.startsWith('/jobs') ||
     pathname.startsWith('/part-timer') ||
     pathname.startsWith('/register') ||
+    pathname.startsWith('/forgot-password') ||
+    pathname.startsWith('/account/blocked') ||
     pathname.startsWith('/api/health') ||
     pathname.startsWith('/api/scan') ||
     pathname.startsWith('/api/webhooks/baileys/inbound') ||
     pathname.startsWith('/api/public/register') ||
     pathname.startsWith('/api/public/otp') ||
+    pathname.startsWith('/api/auth/password-reset') ||
     pathname === '/login' ||
     pathname === '/' ||
     pathname === '/api/auth/login' ||
-    pathname === '/api/auth/employer-login' ||
+    pathname === '/api/auth/select-role' ||
     pathname === '/api/auth/logout'
   ) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin') || pathname.startsWith('/employer')) {
+  if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin') || pathname.startsWith('/employer') || pathname.startsWith('/worker') || pathname.startsWith('/account/switch')) {
     const session = await getSession(req);
     if (!session) {
       if (pathname.startsWith('/api/')) {
@@ -77,6 +80,12 @@ export async function proxy(req: NextRequest) {
         ? NextResponse.json({ error: 'forbidden' }, { status: 403 })
         : NextResponse.redirect(new URL(resolveHomePath(session), req.url));
     }
+
+    if (pathname.startsWith('/worker') && session.role !== 'WORKER') {
+      return pathname.startsWith('/api/')
+        ? NextResponse.json({ error: 'forbidden' }, { status: 403 })
+        : NextResponse.redirect(new URL(resolveHomePath(session), req.url));
+    }
   }
 
   return NextResponse.next();
@@ -87,13 +96,14 @@ export const config = {
 };
 
 function normalizeSessionRole(value: unknown): SessionRole {
-  if (value === 'EMPLOYER' || value === 'PART_TIMER' || value === 'ADMIN') return value;
+  if (value === 'EMPLOYER' || value === 'WORKER' || value === 'ADMIN') return value;
+  if (value === 'PART_TIMER') return 'WORKER';
   return 'ADMIN';
 }
 
 function resolveHomePath(session: ProxySession): string {
-  if (session.role === 'ADMIN') return '/admin';
+  if (session.role === 'ADMIN') return '/admin/dashboard';
   if (session.role === 'EMPLOYER') return session.tenantId ? '/employer/dashboard' : '/register/employer';
-  if (session.role === 'PART_TIMER') return session.phoneE164 ? `/part-timer/profile?phone=${encodeURIComponent(session.phoneE164)}` : '/register';
+  if (session.role === 'WORKER') return '/worker/dashboard';
   return '/register';
 }
