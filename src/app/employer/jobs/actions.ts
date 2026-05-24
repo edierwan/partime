@@ -3,8 +3,7 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireSession } from '@/lib/auth';
-import { currentAdminTenantId } from '@/lib/tenant';
+import { requireEmployerPortalContext } from '@/lib/employer-portal';
 import { parseRateInputToCents } from '@/lib/money';
 import { validateMalaysiaLocation } from '@/lib/malaysia-locations';
 import { parseDateInput } from '@/lib/time';
@@ -38,9 +37,8 @@ const jobSchema = z.object({
 });
 
 export async function createEmployerJob(formData: FormData) {
-  await requireSession();
-  const tenantId = await currentAdminTenantId();
-  if (!tenantId) redirect('/employer/jobs?error=no-tenant');
+  const context = await requireEmployerPortalContext();
+  const tenantId = context.tenant.id;
   const parsed = jobSchema.safeParse({
     name: String(formData.get('name') || ''),
     summary: String(formData.get('summary') || ''),
@@ -79,6 +77,10 @@ export async function createEmployerJob(formData: FormData) {
   });
   if (!normalizedLocation.ok) redirect('/employer/jobs/new?error=invalid');
 
+  const requestedJobStatus = parsed.data.jobStatus;
+  const nextJobStatus = context.canPublishJobs ? requestedJobStatus : 'DRAFT';
+  const nextPublicVisible = context.canPublishJobs ? parsed.data.publicVisible : false;
+
   const job = await createMarketplaceJob({
     tenantId,
     name: parsed.data.name,
@@ -100,8 +102,8 @@ export async function createEmployerJob(formData: FormData) {
     headcount: parsed.data.headcount,
     payType: parsed.data.payType,
     defaultRateCents: parseRateInputToCents(parsed.data.defaultRate),
-    publicVisible: parsed.data.publicVisible,
-    jobStatus: parsed.data.jobStatus,
+    publicVisible: nextPublicVisible,
+    jobStatus: nextJobStatus,
     skillIds: parsed.data.skillIds,
   });
 
@@ -129,18 +131,72 @@ export async function createEmployerJob(formData: FormData) {
     }
     await prisma.jobMedia.createMany({ data: uploads });
   }
+  revalidatePath('/employer/dashboard');
   revalidatePath('/employer/jobs');
   revalidatePath('/jobs');
   redirect(`/employer/jobs/${job.id}`);
 }
 
 export async function setEmployerJobStatus(formData: FormData) {
-  await requireSession();
+  const context = await requireEmployerPortalContext();
   const jobId = String(formData.get('jobId') || '');
   const status = String(formData.get('status') || 'DRAFT');
   if (!['DRAFT', 'OPEN', 'OFFERING', 'FULL', 'COMPLETED', 'CANCELLED', 'CLOSED'].includes(status)) return;
-  await prisma.workEvent.update({ where: { id: jobId }, data: { jobStatus: status as any, publicVisible: status === 'OPEN' || status === 'OFFERING' } });
+  const job = await prisma.workEvent.findFirst({ where: { id: jobId, tenantId: context.tenant.id }, select: { id: true } });
+  if (!job) return;
+
+  const nextStatus = context.canPublishJobs || status === 'DRAFT' || status === 'CLOSED' || status === 'COMPLETED' || status === 'CANCELLED'
+    ? status
+    : 'DRAFT';
+  await prisma.workEvent.update({ where: { id: jobId }, data: { jobStatus: nextStatus as any, publicVisible: context.canPublishJobs && (nextStatus === 'OPEN' || nextStatus === 'OFFERING') } });
+  revalidatePath('/employer/dashboard');
   revalidatePath('/employer/jobs');
   revalidatePath(`/employer/jobs/${jobId}`);
   revalidatePath('/jobs');
+}
+
+export async function duplicateEmployerJob(formData: FormData) {
+  const context = await requireEmployerPortalContext();
+  const jobId = String(formData.get('jobId') || '');
+  if (!jobId) redirect('/employer/jobs?error=job-not-found');
+
+  const job = await prisma.workEvent.findFirst({
+    where: { id: jobId, tenantId: context.tenant.id },
+    include: { skills: { select: { skillId: true } } },
+  });
+  if (!job) redirect('/employer/jobs?error=job-not-found');
+
+  const duplicate = await createMarketplaceJob({
+    tenantId: context.tenant.id,
+    name: `${job.name} Copy`,
+    summary: job.summary,
+    description: job.description,
+    dressCode: job.dressCode,
+    toolsNeeded: job.toolsNeeded,
+    category: job.category,
+    location: job.location,
+    stateCode: job.stateCode,
+    state: job.state,
+    city: job.city,
+    address: job.address,
+    addressLine2: job.addressLine2,
+    postcode: job.postcode,
+    workDate: job.workDate,
+    endDate: job.endDate,
+    startTime: job.startTime,
+    endTime: job.endTime,
+    headcount: job.headcount,
+    payType: job.payType as 'HOURLY' | 'DAILY' | 'FIXED',
+    defaultRateCents: job.defaultRateCents,
+    minRateCents: job.minRateCents,
+    maxRateCents: job.maxRateCents,
+    publicVisible: false,
+    jobStatus: 'DRAFT',
+    notes: job.notes,
+    skillIds: job.skills.map((skill) => skill.skillId),
+  });
+
+  revalidatePath('/employer/dashboard');
+  revalidatePath('/employer/jobs');
+  redirect(`/employer/jobs/${duplicate.id}`);
 }

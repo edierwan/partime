@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
+import { requireEmployerPortalContext } from '@/lib/employer-portal';
 import { formatJobDate, formatJobRate, jobPublicHref } from '@/lib/marketplace';
 import { setEmployerJobStatus } from '../actions';
 
 export default async function EmployerJobDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
+  const context = await requireEmployerPortalContext();
   const [job, partTimers] = await Promise.all([
     prisma.workEvent.findUnique({
       where: { id: params.id },
@@ -13,7 +15,11 @@ export default async function EmployerJobDetailPage(props: { params: Promise<{ i
     }),
     prisma.staff.findMany({ where: { active: true, status: 'ACTIVE' }, orderBy: { fullName: 'asc' }, take: 100 }),
   ]);
-  if (!job) notFound();
+  if (!job || job.tenantId !== context.tenant.id) notFound();
+
+  const statusOptions = context.canPublishJobs
+    ? ['DRAFT', 'OPEN', 'OFFERING', 'FULL', 'COMPLETED', 'CANCELLED', 'CLOSED']
+    : ['DRAFT', 'CANCELLED', 'CLOSED'];
 
   return (
     <div className="space-y-5">
@@ -30,9 +36,10 @@ export default async function EmployerJobDetailPage(props: { params: Promise<{ i
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
         <section className="card card-pad space-y-5">
           <div><h2 className="font-semibold text-ink-950">Job details</h2><p className="mt-2 whitespace-pre-line text-sm leading-7 text-ink-700">{job.description || job.summary || job.notes || 'No description added.'}</p></div>
+          {!context.canPublishJobs ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Job boleh disimpan sebagai draft. Publish hanya dibenarkan selepas akaun majikan diluluskan.</div> : null}
           <form action={setEmployerJobStatus} className="flex flex-wrap items-end gap-3 border-t border-ink-200 pt-4">
             <input type="hidden" name="jobId" value={job.id} />
-            <div><label className="label">Status</label><select className="input" name="status" defaultValue={job.jobStatus}><option value="DRAFT">Draft</option><option value="OPEN">Open</option><option value="OFFERING">Offering</option><option value="FULL">Full</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option><option value="CLOSED">Closed</option></select></div>
+            <div><label className="label">Status</label><select className="input" name="status" defaultValue={statusOptions.includes(job.jobStatus) ? job.jobStatus : 'DRAFT'}>{statusOptions.map((status) => <option key={status} value={status}>{status}</option>)}</select></div>
             <button className="btn-primary" type="submit">Update</button>
           </form>
           <div className="border-t border-ink-200 pt-4"><h2 className="font-semibold text-ink-950">Interested part-timers</h2><div className="mt-3 divide-y divide-ink-100">{job.interests.length === 0 && <div className="py-4 text-sm text-ink-500">No interest yet.</div>}{job.interests.map((interest) => <div key={interest.id} className="py-3 text-sm"><div className="font-medium text-ink-950">{interest.partTimer.fullName}</div><div className="text-ink-500">{interest.partTimer.phoneDisplay || interest.partTimer.phoneE164} - {interest.status}</div></div>)}</div></div>

@@ -20,13 +20,13 @@ export default function LoginForm({ next }: { next?: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setErr(data.error || 'Login failed');
         setLoading(false);
         return;
       }
-      router.push(next || '/admin');
+      router.push(data.redirectTo || safeNext(next) || '/admin');
       router.refresh();
     } catch {
       setErr('Network error');
@@ -50,4 +50,9 @@ export default function LoginForm({ next }: { next?: string }) {
       </button>
     </form>
   );
+}
+
+function safeNext(value?: string): string | undefined {
+  if (!value) return undefined;
+  return value.startsWith('/') && !value.startsWith('//') ? value : undefined;
 }

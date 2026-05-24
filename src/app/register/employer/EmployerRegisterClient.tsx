@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { MalaysiaAddressFields } from '@/components/location/MalaysiaAddressFields';
 import { formatTitleCaseControl, maybeFormatTitleCaseControl } from '@/lib/input-formatting';
@@ -16,8 +17,9 @@ type FieldErrors = Record<string, string>;
 
 export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
   const t = publicDict[locale];
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
-  const [step, setStep] = useState<'form' | 'otp' | 'done'>('form');
+  const [step, setStep] = useState<'form' | 'otp'>('form');
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpCode, setOtpCode] = useState('');
@@ -177,19 +179,8 @@ export function EmployerRegisterClient({ locale }: { locale: PublicLocale }) {
       }
       return;
     }
-    setStep('done');
-    setMessage(t.successEmployer);
-  }
-
-  if (step === 'done') {
-    return (
-      <div className="card card-pad mx-auto max-w-xl space-y-4">
-        <div className="text-sm font-semibold text-emerald-700">Partime</div>
-        <h1 className="text-2xl font-semibold text-ink-950">{t.successEmployer}</h1>
-        {message && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</div>}
-        <Link href={`/register?lang=${locale}`} className="btn-primary inline-flex">{t.back}</Link>
-      </div>
-    );
+    router.push(data.redirectTo || '/employer/dashboard?registered=1');
+    router.refresh();
   }
 
   return (

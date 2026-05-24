@@ -1,7 +1,9 @@
 import Link from 'next/link';
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { PublicLanguageSelector } from '@/components/PublicLanguageSelector';
 import { prisma } from '@/lib/db';
+import { getSession, resolveAuthenticatedHomePath } from '@/lib/auth';
 import { normalizeLocale } from '@/lib/public-i18n';
 import { JOB_CATEGORIES, formatJobDate, formatJobRate, jobPublicHref, listPublicJobs } from '@/lib/marketplace';
 
@@ -113,6 +115,8 @@ export default async function Home(
   props: { searchParams: Promise<{ lang?: string; location?: string; skill?: string; date?: string }> }
 ) {
   const searchParams = await props.searchParams;
+  const session = await getSession();
+  if (session) redirect(resolveAuthenticatedHomePath(session));
   const locale = normalizeLocale(searchParams.lang || (await cookies()).get('partime_public_lang')?.value);
   const t = copy[locale];
   const [jobs, activeJobs, partTimers, employers, offerRecipients, repliedRecipients] = await Promise.all([

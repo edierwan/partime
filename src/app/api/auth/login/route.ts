@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { authenticate, createSessionToken, setSessionCookie } from '@/lib/auth';
+import { authenticate, createSessionToken, resolveAuthenticatedHomePath, setSessionCookie } from '@/lib/auth';
 
 const schema = z.object({
   email: z.string().email(),
@@ -18,5 +18,5 @@ export async function POST(req: Request) {
 
   const token = await createSessionToken(user);
   await setSessionCookie(token);
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, redirectTo: resolveAuthenticatedHomePath(user) });
 }

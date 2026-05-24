@@ -2,19 +2,19 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { requireSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { requireEmployerPortalContext } from '@/lib/employer-portal';
 import { defaultOfferMessage } from '@/lib/offer-messages';
 import { defaultWhatsAppTenant, sendWhatsAppMessage } from '@/lib/whatsapp';
 
 export async function sendJobOffer(formData: FormData) {
-  const session = await requireSession();
+  const context = await requireEmployerPortalContext();
   const jobId = String(formData.get('jobId') || '');
   const selectedIds = Array.from(new Set(formData.getAll('partTimerId').map(String).filter(Boolean)));
   if (!jobId || selectedIds.length === 0) redirect('/employer/offers?error=missing-recipients');
 
   const [job, partTimers] = await Promise.all([
-    prisma.workEvent.findUnique({ where: { id: jobId }, include: { tenant: true } }),
+    prisma.workEvent.findFirst({ where: { id: jobId, tenantId: context.tenant.id }, include: { tenant: true } }),
     prisma.staff.findMany({ where: { id: { in: selectedIds }, active: true, status: 'ACTIVE' }, orderBy: { fullName: 'asc' } }),
   ]);
   if (!job) redirect('/employer/offers?error=job-not-found');
@@ -26,12 +26,12 @@ export async function sendJobOffer(formData: FormData) {
 
   const offer = await prisma.jobOffer.create({
     data: {
-      tenantId: job.tenantId,
+      tenantId: context.tenant.id,
       jobId: job.id,
       title,
       message: messageTemplate,
       status: 'DRAFT',
-      createdByEmail: session.email,
+      createdByEmail: context.session.email,
       recipients: { create: partTimers.map((partTimer) => ({ partTimerId: partTimer.id })) },
     },
     include: { recipients: { include: { partTimer: true } } },
@@ -82,6 +82,8 @@ export async function sendJobOffer(formData: FormData) {
   }
 
   revalidatePath('/employer/offers');
+  revalidatePath('/employer/messages');
+  revalidatePath('/employer/responses');
   revalidatePath(`/employer/jobs/${job.id}`);
   redirect(`/employer/offers?sent=${sentCount}&total=${partTimers.length}`);
 }

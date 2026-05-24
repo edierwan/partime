@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/db';
+import { createSessionToken, setSessionCookie } from '@/lib/auth';
 import { parseEmployerRegistrationForm } from '@/lib/employer-registration';
+import { employerDashboardPath } from '@/lib/employer-portal';
 import { verifyOtpCode } from '@/lib/otp-service';
 import { uniqueTenantSlug } from '@/lib/tenant';
 import { saveEmployerLogo } from '@/lib/uploads';
@@ -89,6 +93,49 @@ export async function POST(req: Request) {
     },
   });
 
+  const ownerEmail = await resolveEmployerOwnerEmail(value.contactEmail, tenant.id);
+  const owner = await prisma.adminUser.create({
+    data: {
+      email: ownerEmail,
+      passwordHash: await bcrypt.hash(randomUUID(), 10),
+      name: value.contactPersonName,
+      platformRole: 'EMPLOYER_OWNER',
+      tenantMemberships: {
+        create: {
+          tenantId: tenant.id,
+          role: 'OWNER',
+        },
+      },
+    },
+    select: { id: true, email: true, name: true },
+  });
+
   await prisma.staffOtp.update({ where: { id: otpResult.otp.id }, data: { consumedAt: new Date() } });
-  return NextResponse.json({ ok: true, message: 'Employer registration successful. Your workspace is pending admin review.', warning });
+
+  const token = await createSessionToken({
+    sub: owner.id,
+    email: owner.email,
+    name: owner.name || value.contactPersonName,
+    role: 'EMPLOYER',
+    tenantId: tenant.id,
+    phoneE164: value.contactPhoneE164,
+  });
+  await setSessionCookie(token);
+
+  return NextResponse.json({
+    ok: true,
+    message: 'Employer registration successful. Your workspace is pending admin review.',
+    warning,
+    redirectTo: `${employerDashboardPath()}?registered=1`,
+  });
+}
+
+async function resolveEmployerOwnerEmail(contactEmail: string | null, tenantId: string): Promise<string> {
+  const preferredEmail = String(contactEmail || '').trim().toLowerCase();
+  if (preferredEmail) {
+    const existing = await prisma.adminUser.findUnique({ where: { email: preferredEmail }, select: { id: true } });
+    if (!existing) return preferredEmail;
+  }
+
+  return `owner+${tenantId}@employer.partime.local`;
 }
